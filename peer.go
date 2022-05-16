@@ -1,0 +1,436 @@
+package chirp
+
+/*
+TODO:
+
+- [ ] Package documentation.
+- [ ] Wire up *Peer to the context for a handler.
+- [ ] Correctness tests.
+- [x] Register handlers.
+- [x] Make peer restartable.
+
+*/
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"sync"
+)
+
+// A Channel is a reliable ordered stream of packets shared by two peers.
+//
+// The methods of an implementation must be safe for concurrent use by one
+// sender and one receiver.
+type Channel interface {
+	// Send the packet in binary format to the receiver.
+	Send(*Packet) error
+
+	// Receive the next available packet from the channel.
+	Recv() (*Packet, error)
+
+	// Close the channel, causing any pending send or receive operations to
+	// terminate and report an error. After a channel is closed, all further
+	// operations on it must report an error.
+	Close() error
+}
+
+// A Handler processes a request from the peer.  A handler can obtain the peer
+// from its context argument using the ContextPeer helper.
+type Handler = func(context.Context, *Request) (uint32, []byte, error)
+
+// A Peer implements a Chirp v0 peer. A zero-valued Peer is ready for use, but
+// must not be copied after any method has been called.
+//
+// Call Start with a channel to start the service routine for the peer.  Once
+// started, a peer runs until Stop is called, the channel closes, or a protocol
+// fatal error occurs. Use Wait to wait for the peer to exit and report its
+// status.
+//
+// Calling Stop terminates all method handlers and calls currently executing.
+//
+// Call Handle to add handlers to the local peer.  Use Call to invoke a call on
+// the remote peer. Both of these methods are safe for concurrent use by
+// multiple goroutines.
+type Peer struct {
+	in   interface{ Recv() (*Packet, error) }
+	done chan struct{}
+
+	μ sync.Mutex
+
+	out Channel
+	err error // protocol fatal error
+
+	ocall map[uint32]pending
+	nexto uint32
+	icall map[uint32]func()  // requestID → cancel func
+	imux  map[uint32]Handler // methodID → handler
+}
+
+// Start starts the peer running on the given channel. The peer runs until the
+// channel closes or a protocol fatal error occurs. Start does not block; call
+// Wait to wait for the peer to exit and report its status.
+func (p *Peer) Start(ch Channel) *Peer {
+	if p.in != nil {
+		panic("peer is already started")
+	}
+
+	p.in = ch
+	p.done = make(chan struct{})
+	p.out = ch
+	p.err = nil
+	p.ocall = make(map[uint32]pending)
+	p.nexto = 0
+	p.icall = make(map[uint32]func())
+
+	go func() {
+		defer close(p.done)
+		for {
+			pkt, err := p.in.Recv()
+			if err != nil {
+				p.fail(err)
+				return
+			}
+			if err := p.dispatchPacket(pkt); err != nil {
+				p.fail(err)
+				return
+			}
+		}
+	}()
+
+	return p
+}
+
+// Stop closes the channel and terminates the peer. It blocks until the peer
+// has exited and returns its status.
+func (p *Peer) Stop() error {
+	p.μ.Lock()
+	p.out.Close()
+	p.μ.Unlock()
+	return p.Wait()
+}
+
+// Wait blocks until p terminates and reports the error that cause it to stop.
+// After Wait completes it is safe to restart the peer with a new channel.
+func (p *Peer) Wait() error {
+	if p.in == nil {
+		return nil
+	}
+	<-p.done // service routine has exited
+
+	if errors.Is(p.err, net.ErrClosed) {
+		return nil
+	}
+
+	// Clean up peer state so it can be garbage collected.
+	p.in = nil
+	p.done = nil
+	p.out = nil
+	p.ocall = nil
+	p.icall = nil
+	return p.err
+}
+
+// Call sends a call for the specified method and data and blocks until ctx
+// ends or until the response is received. If ctx ends before the peer replies,
+// the call will be automatically cancelled.  An error reported by Call has
+// concrete type *CallError.
+func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (*Response, error) {
+	id, pc, err := p.sendReq(method, data)
+	if err != nil {
+		return nil, &CallError{Err: err}
+	}
+
+	select {
+	case <-ctx.Done():
+		// The local context ended, push a cancellation to the peer.
+		return nil, &CallError{Err: p.sendCancel(ctx, id)}
+
+	case rsp, ok := <-pc:
+		if ok {
+			if rsp.Code == CodeSuccess {
+				return rsp, nil
+			} else {
+				return nil, &CallError{rsp: rsp}
+			}
+		}
+
+		// Closed without a response means there was a protocol fatal error.
+		<-p.done
+		return nil, &CallError{Err: fmt.Errorf("call terminated: %w", p.err)}
+	}
+}
+
+// sendCancel sends a cancellation for id to the remote peer then returns the
+// error from ctx.
+func (p *Peer) sendCancel(ctx context.Context, id uint32) error {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	if err := p.out.Send(&Packet{
+		Type:    PacketCancel,
+		Payload: (&Cancel{RequestID: id}).encode(),
+	}); err != nil {
+		p.out.Close() // protocol fatal
+		return err
+	}
+	return ctx.Err()
+}
+
+// Handle registers a handler for the specified method ID. It is safe to call
+// this while the peer is running. Passing a nil Handler removes any handler
+// for the specified ID. Handle returns p to permit chaining.
+func (p *Peer) Handle(methodID uint32, handler Handler) *Peer {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	if p.imux == nil {
+		p.imux = make(map[uint32]Handler)
+	}
+	if handler == nil {
+		delete(p.imux, methodID)
+	} else {
+		p.imux[methodID] = handler
+	}
+	return p
+}
+
+// fail terminates all pending calls and updates the failure status.
+func (p *Peer) fail(err error) {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	p.out.Close()
+
+	// Terminate all incomplete pending calls.
+	for _, pc := range p.ocall {
+		close(pc)
+	}
+	p.ocall = nil
+
+	// Terminate all incomplete inbound calls.
+	for _, stop := range p.icall {
+		stop()
+	}
+	p.icall = nil
+	p.err = err
+}
+
+func (p *Peer) sendRsp(rsp *Response) {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+
+	// Release the marker for this request.
+	delete(p.icall, rsp.RequestID)
+
+	if p.err != nil {
+		return
+	} else if err := p.out.Send(&Packet{
+		Type:    PacketResponse,
+		Payload: rsp.encode(),
+	}); err != nil {
+		p.out.Close()
+	}
+}
+
+// sendReq sends a request packet for the given method and data.
+// It blocks until the send completes, but does not wait for the reply.
+// The response will be delivered on the returned pending channel.
+// The caller must hold p.μ.
+func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	if p.err != nil {
+		p.out.Close()
+		return 0, nil, p.err
+	}
+
+	id := p.nexto + 1
+
+	if err := p.out.Send(&Packet{
+		Type: PacketRequest,
+		Payload: (&Request{
+			RequestID: id,
+			MethodID:  method,
+			Data:      data,
+		}).encode(),
+	}); err != nil {
+		return 0, nil, err
+	}
+
+	pc := make(pending, 1)
+	p.nexto++
+	p.ocall[id] = pc
+	return id, pc, nil
+}
+
+// dispatchRequest dispatches an inbound request to its handler. It reports an
+// error back to the caller for duplicate request ID or unknown method.
+// The caller must hold p.μ.
+func (p *Peer) dispatchRequest(req *Request) error {
+	// Report duplicate request ID without failing the existing call.
+	if _, ok := p.icall[req.RequestID]; ok {
+		return p.out.Send(&Packet{
+			Type: PacketResponse,
+			Payload: (&Response{
+				RequestID: req.RequestID,
+				Code:      CodeDuplicateID,
+			}).encode(),
+		})
+	}
+
+	handler, ok := p.imux[req.MethodID]
+	if !ok {
+		return p.out.Send(&Packet{
+			Type: PacketResponse,
+			Payload: (&Response{
+				RequestID: req.RequestID,
+				Code:      CodeUnknownMethod,
+			}).encode(),
+		})
+	}
+
+	// Start a goroutine to service the request. The goroutine handles
+	// cancellation and response delivery.
+	pctx := context.WithValue(context.Background(), peerContextKey{}, p)
+	ctx, cancel := context.WithCancel(pctx)
+	p.icall[req.RequestID] = cancel
+
+	go func() {
+		defer cancel()
+
+		var tag uint32
+		var data []byte
+		var err error
+
+		func() {
+			// Ensure a panic out of the handler is turned into a graceful response.
+			defer func() {
+				if x := recover(); x != nil && err == nil {
+					err = fmt.Errorf("handler panicked (recovered): %v", x)
+				}
+			}()
+			tag, data, err = handler(ctx, req)
+		}()
+		if tag > 0xffffff && err == nil {
+			err = fmt.Errorf("response tag %x out of range", tag)
+		}
+
+		if err == nil {
+			p.sendRsp(&Response{
+				RequestID: req.RequestID,
+				Code:      CodeSuccess,
+				Tag:       tag,
+				Data:      data,
+			})
+		} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			p.sendRsp(&Response{
+				RequestID: req.RequestID,
+				Code:      CodeCanceled,
+			})
+		} else {
+			p.sendRsp(&Response{
+				RequestID: req.RequestID,
+				Code:      CodeServiceError,
+				Data:      []byte(err.Error()),
+			})
+		}
+	}()
+	return nil
+}
+
+// dispatchPacket routes an inbound packet from the remote peer.
+// Any error it reports is protocol fatal.
+// The caller must hold p.μ.
+func (p *Peer) dispatchPacket(pkt *Packet) error {
+	switch pkt.Type {
+	case PacketRequest:
+		var req Request
+		if err := req.UnmarshalBinary(pkt.Payload); err != nil {
+			return fmt.Errorf("invalid request packet: %w", err)
+		}
+		p.μ.Lock()
+		defer p.μ.Unlock()
+		return p.dispatchRequest(&req)
+
+	case PacketCancel:
+		var req Cancel
+		if err := req.UnmarshalBinary(pkt.Payload); err != nil {
+			return fmt.Errorf("invalid cancel packet: %w", err)
+		}
+		p.μ.Lock()
+		defer p.μ.Unlock()
+
+		// If there is a dispatch in flight for this request, signal it to stop.
+		// The dispatch wrapper will figure out how to reply and clean up.
+		if stop, ok := p.icall[req.RequestID]; ok {
+			stop()
+		}
+		return nil
+
+	case PacketResponse:
+		var rsp Response
+		if err := rsp.UnmarshalBinary(pkt.Payload); err != nil {
+			return fmt.Errorf("invalid response packet: %w", err)
+		}
+		p.μ.Lock()
+		defer p.μ.Unlock()
+
+		pc, ok := p.ocall[rsp.RequestID]
+		if !ok {
+			// Silently discard response for unknown request ID.
+			return nil
+		}
+
+		delete(p.ocall, rsp.RequestID) // release the pending request
+		if len(p.ocall) == 0 {
+			p.nexto = 0 // reset the ID counter whenever no requests are pending
+		}
+
+		pc.deliver(&rsp) // does not block
+
+	default:
+		panic("not implemented yet") // TODO: add callback
+	}
+	return nil
+}
+
+type pending chan *Response
+
+func (p pending) deliver(r *Response) { p <- r; close(p) }
+
+// CallError is the concrete type of errors reported by the Call method of a
+// Peer.  For a protocol fatal error, the Err field gives the underlying error
+// that caused the failure. Otherwise, Err is nil and the Response method
+// returns the response that caused the failure.
+type CallError struct {
+	rsp *Response // nil for protocol errors
+	Err error     // nil for service errors
+}
+
+// Response returns nil if c is a protocol fatal error, otherwise it returns
+// the non-nil response carrying a service error.
+func (c *CallError) Response() *Response { return c.rsp }
+
+// Unwrap reports the underlying error of c. If c.Err == nil, this is nil.
+func (c *CallError) Unwrap() error { return c.Err }
+
+// Error satisfies the error interface.
+func (c *CallError) Error() string {
+	if c.Err != nil {
+		return c.Err.Error()
+	}
+	if len(c.rsp.Data) == 0 {
+		return fmt.Sprintf("service error: %v", c.rsp.Code)
+	}
+	return fmt.Sprintf("service error: %v (%v)", c.rsp.Code, string(c.rsp.Data))
+}
+
+type peerContextKey struct{}
+
+// ContextPeer returns the Peer associated with the given context, or nil if
+// none is defined.  The context passed to a method Handler has this value.
+func ContextPeer(ctx context.Context) *Peer {
+	if v := ctx.Value(peerContextKey{}); v != nil {
+		return v.(*Peer)
+	}
+	return nil
+}
