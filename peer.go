@@ -72,6 +72,9 @@ type Peer struct {
 	plog  PacketLogger                 // what it says on the tin
 }
 
+// NewPeer constructs a new unstarted peer.
+func NewPeer() *Peer { return new(Peer) }
+
 // Start starts the peer running on the given channel. The peer runs until the
 // channel closes or a protocol fatal error occurs. Start does not block; call
 // Wait to wait for the peer to exit and report its status.
