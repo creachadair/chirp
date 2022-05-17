@@ -46,6 +46,9 @@ type Handler = func(context.Context, *Request) (uint32, []byte, error)
 // Any error reported by a packet handler is protocol fatal.
 type PacketHandler = func(context.Context, *Packet) error
 
+// A PacketLogger logs a packet received the remote peer.
+type PacketLogger = func(pkt *Packet)
+
 // A Peer implements a Chirp v0 peer. A zero-valued Peer is ready for use, but
 // must not be copied after any method has been called.
 //
@@ -73,6 +76,7 @@ type Peer struct {
 	icall map[uint32]func()            // requestID → cancel func
 	imux  map[uint32]Handler           // methodID → handler
 	pmux  map[PacketType]PacketHandler // packetType → packet handler
+	plog  PacketLogger                 // what it says on the tin
 }
 
 // Start starts the peer running on the given channel. The peer runs until the
@@ -179,21 +183,6 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (*Response,
 	}
 }
 
-// sendCancel sends a cancellation for id to the remote peer then returns the
-// error from ctx.
-func (p *Peer) sendCancel(ctx context.Context, id uint32) error {
-	p.μ.Lock()
-	defer p.μ.Unlock()
-	if err := p.out.Send(&Packet{
-		Type:    PacketCancel,
-		Payload: (&Cancel{RequestID: id}).encode(),
-	}); err != nil {
-		p.out.Close() // protocol fatal
-		return err
-	}
-	return ctx.Err()
-}
-
 // Handle registers a handler for the specified method ID. It is safe to call
 // this while the peer is running. Passing a nil Handler removes any handler
 // for the specified ID. Handle returns p to permit chaining.
@@ -236,6 +225,19 @@ func (p *Peer) HandlePacket(ptype PacketType, handler PacketHandler) *Peer {
 	} else {
 		p.pmux[ptype] = handler
 	}
+	return p
+}
+
+// LogPackets registers a callback that will be invoked for all packets
+// received from the remote peer, regardless of type (including packets that
+// will be discarded).
+//
+// Passing a nil callback disables logging. The packet logger is invoked
+// synchronously with the processing of packets, prior to handling.
+func (p *Peer) LogPackets(log PacketLogger) *Peer {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	p.plog = log
 	return p
 }
 
@@ -305,6 +307,21 @@ func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
 	p.nexto++
 	p.ocall[id] = pc
 	return id, pc, nil
+}
+
+// sendCancel sends a cancellation for id to the remote peer then returns the
+// error from ctx.
+func (p *Peer) sendCancel(ctx context.Context, id uint32) error {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	if err := p.out.Send(&Packet{
+		Type:    PacketCancel,
+		Payload: (&Cancel{RequestID: id}).encode(),
+	}); err != nil {
+		p.out.Close() // protocol fatal
+		return err
+	}
+	return ctx.Err()
 }
 
 // dispatchRequest dispatches an inbound request to its handler. It reports an
@@ -386,6 +403,9 @@ func (p *Peer) dispatchRequest(req *Request) error {
 // Any error it reports is protocol fatal.
 // The caller must hold p.μ.
 func (p *Peer) dispatchPacket(pkt *Packet) error {
+	if p.plog != nil {
+		p.plog(pkt)
+	}
 	switch pkt.Type {
 	case PacketRequest:
 		var req Request
