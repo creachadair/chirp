@@ -3,11 +3,12 @@ package chirp
 /*
 TODO:
 
-- [ ] Package documentation.
-- [ ] Wire up *Peer to the context for a handler.
-- [ ] Correctness tests.
+- [x] Package documentation.
+- [x] Wire up *Peer to the context for a handler.
+- [x] Call correctness tests.
 - [x] Register handlers.
 - [x] Make peer restartable.
+- [ ] Packet handling tests.
 
 */
 
@@ -36,9 +37,14 @@ type Channel interface {
 	Close() error
 }
 
-// A Handler processes a request from the peer.  A handler can obtain the peer
-// from its context argument using the ContextPeer helper.
+// A Handler processes a request from the remote peer.  A handler can obtain
+// the peer from its context argument using the ContextPeer helper.
 type Handler = func(context.Context, *Request) (uint32, []byte, error)
+
+// A PacketHandler processes a packet from the remote peer. A packet handler
+// can obtain the peer from its context argument using the ContextPeer helper.
+// Any error reported by a packet handler is protocol fatal.
+type PacketHandler = func(context.Context, *Packet) error
 
 // A Peer implements a Chirp v0 peer. A zero-valued Peer is ready for use, but
 // must not be copied after any method has been called.
@@ -64,8 +70,9 @@ type Peer struct {
 
 	ocall map[uint32]pending
 	nexto uint32
-	icall map[uint32]func()  // requestID → cancel func
-	imux  map[uint32]Handler // methodID → handler
+	icall map[uint32]func()            // requestID → cancel func
+	imux  map[uint32]Handler           // methodID → handler
+	pmux  map[PacketType]PacketHandler // packetType → packet handler
 }
 
 // Start starts the peer running on the given channel. The peer runs until the
@@ -200,6 +207,34 @@ func (p *Peer) Handle(methodID uint32, handler Handler) *Peer {
 		delete(p.imux, methodID)
 	} else {
 		p.imux[methodID] = handler
+	}
+	return p
+}
+
+// HandlePacket registers a callback that will be invoked whenever the remote
+// peer sends a packet with the specified type. This method will panic if a
+// reserved packet type is specified. Passing a nil callback removes any
+// handler for the specified packet type. HandlePacket returns p to permit
+// chaining.
+//
+// Packet handlers are invoked synchronously with the processing of packets
+// sent by the remote peer, and there will be at most one packet handler active
+// at a time. If a packet handler panics or reports an error, it is protocol
+// fatal and will terminate the peer.
+func (p *Peer) HandlePacket(ptype PacketType, handler PacketHandler) *Peer {
+	if ptype <= maxReservedType {
+		panic(fmt.Sprintf("cannot handle reserved packet type %d", ptype))
+	}
+
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	if p.pmux == nil {
+		p.pmux = make(map[PacketType]PacketHandler)
+	}
+	if handler == nil {
+		delete(p.pmux, ptype)
+	} else {
+		p.pmux[ptype] = handler
 	}
 	return p
 }
@@ -398,7 +433,25 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		pc.deliver(&rsp) // does not block
 
 	default:
-		panic("not implemented yet") // TODO: add callback
+		p.μ.Lock()
+		handler, ok := p.pmux[pkt.Type]
+		p.μ.Unlock()
+
+		if ok {
+			pctx := context.WithValue(context.Background(), peerContextKey{}, p)
+			var err error
+			func() {
+				// Ensure a panic out of a packet handler is turned into a protocol fatal.
+				defer func() {
+					if x := recover(); x != nil && err == nil {
+						err = fmt.Errorf("packet handler panicked (recovered): %v", x)
+					}
+				}()
+				err = handler(pctx, pkt)
+			}()
+			return err
+		}
+		// fall through and ignore the packet
 	}
 	return nil
 }
