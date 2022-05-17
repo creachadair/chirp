@@ -1,17 +1,5 @@
 package chirp
 
-/*
-TODO:
-
-- [x] Package documentation.
-- [x] Wire up *Peer to the context for a handler.
-- [x] Call correctness tests.
-- [x] Register handlers.
-- [x] Make peer restartable.
-- [ ] Packet handling tests.
-
-*/
-
 import (
 	"context"
 	"errors"
