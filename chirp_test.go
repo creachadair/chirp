@@ -149,6 +149,46 @@ func TestProtocolFatal(t *testing.T) {
 	})
 }
 
+func TestCustomPacket(t *testing.T) {
+	loc := peers.NewLocal()
+
+	var log []*chirp.Packet
+	var got []*chirp.Packet
+	loc.A.
+		HandlePacket(128, func(_ context.Context, pkt *chirp.Packet) error {
+			got = append(got, pkt)
+			return nil
+		}).
+		LogPackets(func(pkt *chirp.Packet) {
+			log = append(log, pkt)
+		})
+
+	// Unknown packet type: Logged but discarded.
+	p1 := &chirp.Packet{Type: 100, Payload: []byte("unrecognized")}
+
+	// Registered custom packet type: Logged and "processed".
+	p2 := &chirp.Packet{Type: 128, Payload: []byte("custom")}
+
+	if err := loc.B.SendPacket(p1.Type, p1.Payload); err != nil {
+		t.Fatalf("SendPacket: %v", err)
+	}
+	if err := loc.B.SendPacket(p2.Type, p2.Payload); err != nil {
+		t.Fatalf("SendPacket: %v", err)
+	}
+
+	// Stop the peer so the callbacks settle.
+	if err := loc.Stop(); err != nil {
+		t.Errorf("Stop peer: %v", err)
+	}
+
+	if diff := cmp.Diff([]*chirp.Packet{p1, p2}, log); diff != "" {
+		t.Errorf("Packet log (-want, +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]*chirp.Packet{p2}, got); diff != "" {
+		t.Errorf("Custom packet (-want, +got):\n%s", diff)
+	}
+}
+
 func rawChannel() (*io.PipeWriter, channel.IOChannel) {
 	pr, tw := io.Pipe()
 	_, pw := io.Pipe()
