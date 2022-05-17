@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/chirp/peers"
+	"github.com/creachadair/taskgroup"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -189,6 +191,52 @@ func TestCustomPacket(t *testing.T) {
 	}
 }
 
+func TestConcurrency(t *testing.T) {
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	// To give the race detector something to push against, make the peers call
+	// each other lots of times concurrently and wait for the responses.
+	loc.A.Handle(100, slowEcho)
+	loc.B.Handle(200, slowEcho)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const numCalls = 128 // per peer
+
+	calls := taskgroup.New(taskgroup.Trigger(cancel))
+	for i := 0; i < numCalls; i++ {
+
+		// Send calls from A to B.
+		ab := fmt.Sprintf("ab-call-%d", i+1)
+		calls.Go(func() error {
+			rsp, err := loc.A.Call(ctx, 200, []byte(ab))
+			if err != nil {
+				return err
+			} else if got := string(rsp.Data); got != ab {
+				return fmt.Errorf("got %q, want %q", got, ab)
+			}
+			return nil
+		})
+
+		// Send calls from B to A.
+		ba := fmt.Sprintf("ba-call-%d", i+1)
+		calls.Go(func() error {
+			rsp, err := loc.B.Call(ctx, 100, []byte(ba))
+			if err != nil {
+				return err
+			} else if got := string(rsp.Data); got != ba {
+				return fmt.Errorf("got %q, want %q", got, ba)
+			}
+			return nil
+		})
+	}
+	if err := calls.Wait(); err != nil {
+		t.Errorf("Calls: %v", err)
+	}
+}
+
 func rawChannel() (*io.PipeWriter, channel.IOChannel) {
 	pr, tw := io.Pipe()
 	_, pw := io.Pipe()
@@ -201,6 +249,11 @@ func mustErr(t *testing.T, err error, want string) {
 	} else if !strings.Contains(err.Error(), want) {
 		t.Fatalf("Got %v, want %v", err, want)
 	}
+}
+
+func slowEcho(_ context.Context, req *chirp.Request) (uint32, []byte, error) {
+	time.Sleep(time.Duration(rand.Intn(100)+50) * time.Microsecond) // "work"
+	return 0, req.Data, nil
 }
 
 // parseTestSpec parses a string giving test values to return from a method
