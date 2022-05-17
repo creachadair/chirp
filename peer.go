@@ -54,9 +54,14 @@ type Peer struct {
 	in   interface{ Recv() (*Packet, error) }
 	done chan struct{}
 
+	out struct {
+		// Must hold the lock to send to or set ch.
+		sync.Mutex
+		ch Channel
+	}
+
 	μ sync.Mutex
 
-	out Channel
 	err error // protocol fatal error
 
 	ocall map[uint32]pending
@@ -77,7 +82,7 @@ func (p *Peer) Start(ch Channel) *Peer {
 
 	p.in = ch
 	p.done = make(chan struct{})
-	p.out = ch
+	p.out.ch = ch
 	p.err = nil
 	p.ocall = make(map[uint32]pending)
 	p.nexto = 0
@@ -103,12 +108,7 @@ func (p *Peer) Start(ch Channel) *Peer {
 
 // Stop closes the channel and terminates the peer. It blocks until the peer
 // has exited and returns its status.
-func (p *Peer) Stop() error {
-	p.μ.Lock()
-	p.out.Close()
-	p.μ.Unlock()
-	return p.Wait()
-}
+func (p *Peer) Stop() error { p.closeOut(); return p.Wait() }
 
 // Wait blocks until p terminates and reports the error that cause it to stop.
 // After Wait completes it is safe to restart the peer with a new channel.
@@ -125,7 +125,7 @@ func (p *Peer) Wait() error {
 	// Clean up peer state so it can be garbage collected.
 	p.in = nil
 	p.done = nil
-	p.out = nil
+	p.out.ch = nil
 	p.ocall = nil
 	p.icall = nil
 	return p.err
@@ -133,9 +133,7 @@ func (p *Peer) Wait() error {
 
 // SendPacket sends a packet to the remote peer. Any error is protocol fatal.
 func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
-	p.μ.Lock()
-	defer p.μ.Unlock()
-	return p.out.Send(&Packet{
+	return p.sendOut(&Packet{
 		Type:    ptype,
 		Payload: payload,
 	})
@@ -231,9 +229,10 @@ func (p *Peer) LogPackets(log PacketLogger) *Peer {
 
 // fail terminates all pending calls and updates the failure status.
 func (p *Peer) fail(err error) {
+	p.closeOut()
+
 	p.μ.Lock()
 	defer p.μ.Unlock()
-	p.out.Close()
 
 	// Terminate all incomplete pending calls.
 	for _, pc := range p.ocall {
@@ -251,62 +250,67 @@ func (p *Peer) fail(err error) {
 
 func (p *Peer) sendRsp(rsp *Response) {
 	p.μ.Lock()
-	defer p.μ.Unlock()
-
-	// Release the marker for this request.
 	delete(p.icall, rsp.RequestID)
+	err := p.err
+	p.μ.Unlock()
 
-	if p.err != nil {
+	if err != nil {
 		return
-	} else if err := p.out.Send(&Packet{
+	}
+
+	if err := p.sendOut(&Packet{
 		Type:    PacketResponse,
 		Payload: rsp.encode(),
 	}); err != nil {
-		p.out.Close()
+		p.closeOut()
 	}
 }
 
 // sendReq sends a request packet for the given method and data.
 // It blocks until the send completes, but does not wait for the reply.
 // The response will be delivered on the returned pending channel.
-// The caller must hold p.μ.
 func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
+	// Phase 1: Check for fatal errors and acquire state.
 	p.μ.Lock()
-	defer p.μ.Unlock()
-	if p.err != nil {
-		p.out.Close()
-		return 0, nil, p.err
+	if err := p.err; err != nil {
+		p.μ.Unlock()
+		return 0, nil, err
 	}
+	p.nexto++
+	id := p.nexto
+	pc := make(pending, 1)
+	p.ocall[id] = pc
+	p.μ.Unlock()
 
-	id := p.nexto + 1
-
-	if err := p.out.Send(&Packet{
+	// Send the request to the remote peer. Note we MUST NOT hold the state lock
+	// while doing this, as that will block the receiver from dispatching packets.
+	err := p.sendOut(&Packet{
 		Type: PacketRequest,
 		Payload: (&Request{
 			RequestID: id,
 			MethodID:  method,
 			Data:      data,
 		}).encode(),
-	}); err != nil {
+	})
+
+	// Phase 2: Check for an error in the send, and update state if it failed.
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	if err != nil {
+		p.releaseID(id)
 		return 0, nil, err
 	}
-
-	pc := make(pending, 1)
-	p.nexto++
-	p.ocall[id] = pc
 	return id, pc, nil
 }
 
 // sendCancel sends a cancellation for id to the remote peer then returns the
 // error from ctx.
 func (p *Peer) sendCancel(ctx context.Context, id uint32) error {
-	p.μ.Lock()
-	defer p.μ.Unlock()
-	if err := p.out.Send(&Packet{
+	if err := p.sendOut(&Packet{
 		Type:    PacketCancel,
 		Payload: (&Cancel{RequestID: id}).encode(),
 	}); err != nil {
-		p.out.Close() // protocol fatal
+		p.closeOut() // protocol fatal
 		return err
 	}
 	return ctx.Err()
@@ -318,7 +322,7 @@ func (p *Peer) sendCancel(ctx context.Context, id uint32) error {
 func (p *Peer) dispatchRequest(req *Request) error {
 	// Report duplicate request ID without failing the existing call.
 	if _, ok := p.icall[req.RequestID]; ok {
-		return p.out.Send(&Packet{
+		return p.sendOut(&Packet{
 			Type: PacketResponse,
 			Payload: (&Response{
 				RequestID: req.RequestID,
@@ -329,7 +333,7 @@ func (p *Peer) dispatchRequest(req *Request) error {
 
 	handler, ok := p.imux[req.MethodID]
 	if !ok {
-		return p.out.Send(&Packet{
+		return p.sendOut(&Packet{
 			Type: PacketResponse,
 			Payload: (&Response{
 				RequestID: req.RequestID,
@@ -433,11 +437,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 			return nil
 		}
 
-		delete(p.ocall, rsp.RequestID) // release the pending request
-		if len(p.ocall) == 0 {
-			p.nexto = 0 // reset the ID counter whenever no requests are pending
-		}
-
+		p.releaseID(rsp.RequestID)
 		pc.deliver(&rsp) // does not block
 
 	default:
@@ -462,6 +462,29 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		// fall through and ignore the packet
 	}
 	return nil
+}
+
+// releaseID releases the call state for the specified outbound request id.
+// The caller must hold p.μ.
+func (p *Peer) releaseID(id uint32) {
+	delete(p.ocall, id)
+	if len(p.ocall) == 0 {
+		p.nexto = 0
+	}
+}
+
+func (p *Peer) sendOut(pkt *Packet) error {
+	p.out.Lock()
+	defer p.out.Unlock()
+	return p.out.ch.Send(pkt)
+}
+
+func (p *Peer) closeOut() {
+	p.out.Lock()
+	defer p.out.Unlock()
+	if p.out.ch != nil {
+		p.out.ch.Close()
+	}
 }
 
 type pending chan *Response
