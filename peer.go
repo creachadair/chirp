@@ -132,6 +132,16 @@ func (p *Peer) Wait() error {
 	return p.err
 }
 
+// SendPacket sends a packet to the remote peer. Any error is protocol fatal.
+func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	return p.out.Send(&Packet{
+		Type:    ptype,
+		Payload: payload,
+	})
+}
+
 // Call sends a call for the specified method and data and blocks until ctx
 // ends or until the response is received. If ctx ends before the peer replies,
 // the call will be automatically cancelled.  An error reported by Call has
