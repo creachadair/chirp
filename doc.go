@@ -26,4 +26,18 @@
 // request and a corresponding response.  This is the primary communication
 // between peers.  The peer that initiates the call is the caller, the peer
 // that responds is the callee. Calls may propagate in either direction.
+//
+// To define method handlers for inbound calls on the peer, use the Handle
+// method to register a handler for the method ID.
+//
+// Custom Packet Handlers
+//
+// To handle packet types other than Request, Response, and Cancel, the caller
+// can use the SendPacket and HandlePacket methods of the Peer. SendPacket
+// allows the caller to send an arbitrary packet to the peer. Peers that do not
+// understand a packet type will silently discard it (per the spec).
+//
+// HandlePacket registers a callback that will be invoked when a packet is
+// received matching the specified type. If the callback reports an error or
+// panics, it is treated as protocol fatal.
 package chirp
