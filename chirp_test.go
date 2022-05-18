@@ -147,15 +147,6 @@ func TestProtocolFatal(t *testing.T) {
 		mustErr(t, p.Wait(), "invalid protocol version")
 	})
 
-	t.Run("EOF", func(t *testing.T) {
-		tw, ch := rawChannel()
-		p := new(chirp.Peer).Start(ch)
-		time.AfterFunc(time.Second, func() { p.Stop() })
-
-		tw.Close()
-		mustErr(t, p.Wait(), "short packet header")
-	})
-
 	t.Run("ShortHeader", func(t *testing.T) {
 		tw, ch := rawChannel()
 		p := new(chirp.Peer).Start(ch)
