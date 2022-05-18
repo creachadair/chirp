@@ -11,6 +11,7 @@ This document uses key words as described in [RFC 2119](https://datatracker.ietf
     - [Response](#response-payload)
         - [Result codes](#result-codes)
     - [Cancel](#cancel-payload)
+    - [Error](#error-data)
 - [Protocol definition](#protocol-definition)
     - [Session processing](#session-processing)
     - [Error handling](#error-handling)
@@ -34,7 +35,7 @@ A packet is an array of bytes.
 
 A minimal packet is 8 bytes, consisting of the magic number, packet type, and 4-byte payload size with an empty payload.
 
-**Implementation note:** A packet is designed to be self-framing, in that once the header is read the exact length of the payload is known and can be consumed. This permits packets to be sent and received over unframed binary streams such as pipes and sockets, or packed into files. 
+**Implementation note:** A packet is designed to be self-framing, in that once the header is read the exact length of the payload is known and can be consumed. This permits packets to be sent and received over unframed binary streams such as pipes and sockets, or packed into files.
 
 ### Packet Type
 
@@ -69,16 +70,30 @@ All packet type values from 0 to 127 inclusive are reserved by the protocol and 
 | ------ | ----  | ---------------------- |
 | 0      | 4     | Request ID (BE uint32) |
 | 4      | 1     | Result code            |
-| 5      | 3     | Response tag           |
-| 8      | rest  | Response data          |
+| 5      | rest  | Response data          |
 
 - The **Request ID** identifies which request this response belongs to.
 
 - The **Result code** indicates whether the response was successful, and if it was not indicates the reason for failure.
 
-- The **Response tag** is an uninterpreted 24-bit tag value populated by the callee and propagated to the caller host. It may serve as a type hint or variant selector for the response data, or can be used to report small data values directly back to the caller.
+- The **Response data** contain a result from the method handler or an indication of error depending on the [result code](#result-codes).
 
-- The **Response data** are an uninterpreted sequence of bytes (empty OK).
+#### Result Codes
+
+All result codes not defined here are reserved for future use by the protocol.
+
+| Value | Description       | Response data                               |
+|-------|-------------------|---------------------------------------------|
+| 0     | Success           | uninterpreted bytes (method handler result) |
+| 1     | Unknown method    | empty                                       |
+| 2     | Duplicate request | empty                                       |
+| 3     | Request canceled  | empty                                       |
+| 4     | Service error     | [Error](#error-data)                        |
+| 5-255 | (reserved)        |                                             |
+
+A request **succeeds** if its request ID is not a duplicate, the method ID is known by the callee, and the callee's method handler completes without error. On a successful request, the response data are the uninterpreted result returned from the method handler.
+
+A **service error** occurs when a method handler fails to complete normally (for example, as a result of a panic or exception), or otherwise reports an error without producing a result. In this case, the implementation MUST set the response code to 4 (Service error) and the response data to an [Error](#error-data).
 
 ### Cancel Payload
 
@@ -88,22 +103,23 @@ All packet type values from 0 to 127 inclusive are reserved by the protocol and 
 
 - The **Request ID** identifies which pending request to cancel.
 
-### Result Codes
+### Error Data
 
-A request **succeeds** if its request ID is not a duplicate, the method ID is known by the callee, and the callee's method implementation completes.
+| Offset | Bytes | Description                    |
+|--------|-------|--------------------------------|
+| 0      | 2     | Error code (BE uint16)         |
+| 2      | 2     | Message length (BE uint16 = m) |
+| 4      | m     | Description (UTF-8 text)       |
+| 4+m    | rest  | Auxuiliary data                |
 
-| Value | Description       | Payload       |
-| ----- | ----------------- | ------------- |
-| 0     | Success           | set by callee |
-| 1     | Unknown method    | empty         |
-| 2     | Duplicate request | empty         |
-| 3     | Request canceled  | empty         |
-| 4     | Service error     | UTF-8 string  |
-| 5-255 | (reserved)        |               |
+- The **Error code** is an uninterpreted machine-readable error code describing the meaning of the error. The implementation SHOULD permit the method handler to choose this value; otherwise the implementation SHOULD set this field to 0.
 
-All result codes not defined here are reserved for future use by the protocol.
+- The **Description** is a length-prefixed string giving a human-readable description of the error. This field MAY be empty but if non-empty MUST be encoded in UTF-8. The description MUST NOT exceed 65535 bytes in length; the implementation should truncate the message as necessary to fit within this constraint.
 
-In case of a service error, the implementation SHOULD set the data field of the response to a human-readable string describing the error. This allows the caller to provide context in error diagnostics or log messages to assist in debugging. If the data field is not empty, it MUST be encoded as UTF-8.
+- The **Auxiliary data** are an uninterpreted sequence of bytes chosen by the handler (empty OK).
+
+As a special case, then implementation SHALL treat an empty byte array as a valid encoding for error data with error code 0, an empty description, and empty auxiliary data.
+
 
 ## Protocol Definition
 
@@ -163,16 +179,16 @@ The sequence of operations for a call is:
 
 1. The caller sends a `Request(id, method, params)` packet to the callee. At this point the call is *pending*. The call remains pending until either *terminated* or *completed* according to the rules below.
 
-   - If `id` duplicates an already pending request, the callee MUST send a `Response(id, DUPLICATE_REQUEST, 0)` packet. This terminates the call. The callee MUST NOT interrupt or terminate the already-pending request as a result of the duplication.
+   - If `id` duplicates an already pending request, the callee MUST send a `Response(id, DUPLICATE_REQUEST, nil)` packet. This terminates the call. The callee MUST NOT interrupt or terminate the already-pending request as a result of the duplication.
 
-   - If `method` is unknown, the callee MUST send a `Response(id, UNKNOWN_METHOD, 0)` packet. This terminates the call.
+   - If `method` is unknown, the callee MUST send a `Response(id, UNKNOWN_METHOD, nil)` packet. This terminates the call.
 2. The callee runs the handler for the requested method.
 
-   - If the handler completes with result `(tag, R)`, the callee sends `Response(id, SUCCESS, tag, R)`. This completes the call.
+   - If the handler completes with result `R`, the callee sends `Response(id, SUCCESS, R)`. This completes the call.
 
      N.B.: A successful protocol call may still report a service error to the caller within the result.
 
-   - If the handler does not complete or reports an error instead of a result, the callee sends `Response(id, SERVICE_ERROR, 0)`. This completes the call.
+   - If the handler does not complete or reports an error instead of a result, the callee sends `Response(id, SERVICE_ERROR, nil)`. This completes the call.
 
 Once a call is either terminated or complete, the `id` value for that call is eligible for reuse.
 
@@ -184,17 +200,17 @@ While a call `id` is *pending*, the caller may request its cancellation. To do s
 
 - If `id` is unknown or has already completed, the callee MUST silently discard the packet.
 
-- Otherwise: If the call has not yet been dispatched to a handler, the callee MUST discard it and send `Response(id, CANCELED, 0)`. This terminates the call.
+- Otherwise: If the call has not yet been dispatched to a handler, the callee MUST discard it and send `Response(id, CANCELED, nil)`. This terminates the call.
 
 - Otherwise: If the handler is running, the callee SHOULD attempt to *interrupt* the execution of the handler.
 
-  - If interruption is successful, the callee sends `Response(id, CANCELED, 0)`. This terminates the call.
+  - If interruption is successful, the callee sends `Response(id, CANCELED, nil)`. This terminates the call.
 
-  - If interruption is not possible, the callee MAY send `Response(id, CANCELED, 0)` immediately and discard the handler result when it completes. This terminates the call.
+  - If interruption is not possible, the callee MAY send `Response(id, CANCELED, nil)` immediately and discard the handler result when it completes. This terminates the call.
 
   - Otherwise, the callee MUST ignore the cancellation request and allow the handler to complete normally.
 
-- Otherwise: If the call handler has already completed, the handler SHOULD report its result as a normal response, completing the call. Alternatively, the callee MAY discard the result and send `Response(id, CANCELED, 0)` instead. This terminates the call.
+- Otherwise: If the call handler has already completed, the handler SHOULD report its result as a normal response, completing the call. Alternatively, the callee MAY discard the result and send `Response(id, CANCELED, nil)` instead. This terminates the call.
 
 If cancellation succeeds, the cancellation response supersedes a handler response. Whether or not cancellation succeeds, the callee MUST NOT send multiple responses for the same request.
 
