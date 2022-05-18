@@ -30,7 +30,7 @@ type Channel interface {
 
 // A Handler processes a request from the remote peer.  A handler can obtain
 // the peer from its context argument using the ContextPeer helper.
-type Handler = func(context.Context, *Request) (uint32, []byte, error)
+type Handler = func(context.Context, *Request) ([]byte, error)
 
 // A PacketHandler processes a packet from the remote peer. A packet handler
 // can obtain the peer from its context argument using the ContextPeer helper.
@@ -162,9 +162,12 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (*Response,
 		if ok {
 			if rsp.Code == CodeSuccess {
 				return rsp, nil
-			} else {
-				return nil, &CallError{rsp: rsp}
 			}
+			ce := &CallError{rsp: rsp}
+			if err := ce.ErrorData.UnmarshalBinary(rsp.Data); err != nil {
+				ce.Message = err.Error()
+			}
+			return nil, ce
 		}
 
 		// Closed without a response means there was a protocol fatal error.
@@ -264,7 +267,7 @@ func (p *Peer) sendRsp(rsp *Response) {
 
 	if err := p.sendOut(&Packet{
 		Type:    PacketResponse,
-		Payload: rsp.encode(),
+		Payload: rsp.Encode(),
 	}); err != nil {
 		p.closeOut()
 	}
@@ -290,11 +293,11 @@ func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
 	// while doing this, as that will block the receiver from dispatching packets.
 	err := p.sendOut(&Packet{
 		Type: PacketRequest,
-		Payload: (&Request{
+		Payload: Request{
 			RequestID: id,
 			MethodID:  method,
 			Data:      data,
-		}).encode(),
+		}.Encode(),
 	})
 
 	// Phase 2: Check for an error in the send, and update state if it failed.
@@ -312,7 +315,7 @@ func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
 func (p *Peer) sendCancel(ctx context.Context, id uint32) error {
 	if err := p.sendOut(&Packet{
 		Type:    PacketCancel,
-		Payload: (&Cancel{RequestID: id}).encode(),
+		Payload: Cancel{RequestID: id}.Encode(),
 	}); err != nil {
 		p.closeOut() // protocol fatal
 		return err
@@ -328,10 +331,10 @@ func (p *Peer) dispatchRequest(req *Request) error {
 	if _, ok := p.icall[req.RequestID]; ok {
 		return p.sendOut(&Packet{
 			Type: PacketResponse,
-			Payload: (&Response{
+			Payload: Response{
 				RequestID: req.RequestID,
 				Code:      CodeDuplicateID,
-			}).encode(),
+			}.Encode(),
 		})
 	}
 
@@ -339,10 +342,10 @@ func (p *Peer) dispatchRequest(req *Request) error {
 	if !ok {
 		return p.sendOut(&Packet{
 			Type: PacketResponse,
-			Payload: (&Response{
+			Payload: Response{
 				RequestID: req.RequestID,
 				Code:      CodeUnknownMethod,
-			}).encode(),
+			}.Encode(),
 		})
 	}
 
@@ -355,42 +358,34 @@ func (p *Peer) dispatchRequest(req *Request) error {
 	p.tasks.Go(func() error {
 		defer cancel()
 
-		var tag uint32
-		var data []byte
-		var err error
-
-		func() {
+		data, err := func() (_ []byte, err error) {
 			// Ensure a panic out of the handler is turned into a graceful response.
 			defer func() {
 				if x := recover(); x != nil && err == nil {
 					err = fmt.Errorf("handler panicked (recovered): %v", x)
 				}
 			}()
-			tag, data, err = handler(ctx, req)
+			return handler(ctx, req)
 		}()
-		if tag > 0xffffff && err == nil {
-			err = fmt.Errorf("response tag %x out of range", tag)
-		}
 
+		rsp := &Response{RequestID: req.RequestID}
 		if err == nil {
-			p.sendRsp(&Response{
-				RequestID: req.RequestID,
-				Code:      CodeSuccess,
-				Tag:       tag,
-				Data:      data,
-			})
-		} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			p.sendRsp(&Response{
-				RequestID: req.RequestID,
-				Code:      CodeCanceled,
-			})
+			rsp.Code = CodeSuccess
+			rsp.Data = data
+		} else if err == context.Canceled || err == context.DeadlineExceeded {
+			// N.B. Only do this for the unwrapped sentinel errors.
+			rsp.Code = CodeCanceled
+		} else if ed, ok := err.(*ErrorData); ok {
+			rsp.Code = CodeServiceError
+			rsp.Data = ed.Encode()
+		} else if ed, ok := err.(ErrorData); ok {
+			rsp.Code = CodeServiceError
+			rsp.Data = ed.Encode()
 		} else {
-			p.sendRsp(&Response{
-				RequestID: req.RequestID,
-				Code:      CodeServiceError,
-				Data:      []byte(err.Error()),
-			})
+			rsp.Code = CodeServiceError
+			rsp.Data = ErrorData{Message: err.Error()}.Encode()
 		}
+		p.sendRsp(rsp)
 		return nil
 	})
 	return nil
@@ -452,17 +447,15 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 
 		if ok {
 			pctx := context.WithValue(context.Background(), peerContextKey{}, p)
-			var err error
-			func() {
+			return func() (err error) {
 				// Ensure a panic out of a packet handler is turned into a protocol fatal.
 				defer func() {
 					if x := recover(); x != nil && err == nil {
 						err = fmt.Errorf("packet handler panicked (recovered): %v", x)
 					}
 				}()
-				err = handler(pctx, pkt)
+				return handler(pctx, pkt)
 			}()
-			return err
 		}
 		// fall through and ignore the packet
 	}
@@ -498,15 +491,17 @@ func (p pending) deliver(r *Response) { p <- r; close(p) }
 
 // CallError is the concrete type of errors reported by the Call method of a
 // Peer.  For a protocol fatal error, the Err field gives the underlying error
-// that caused the failure. Otherwise, Err is nil and the Response method
-// returns the response that caused the failure.
+// that caused the failure. Otherwise, Err is nil and the ErrorData field has
+// the error details reported by the peer.
 type CallError struct {
-	rsp *Response // nil for protocol errors
-	Err error     // nil for service errors
+	ErrorData
+	Err error // nil for service errors
+
+	rsp *Response
 }
 
-// Response returns nil if c is a protocol fatal error, otherwise it returns
-// the non-nil response carrying a service error.
+// Response returns the response returned by the peer that provided the service
+// error details.  If c.Err != nil, this is nil.
 func (c *CallError) Response() *Response { return c.rsp }
 
 // Unwrap reports the underlying error of c. If c.Err == nil, this is nil.
@@ -516,11 +511,10 @@ func (c *CallError) Unwrap() error { return c.Err }
 func (c *CallError) Error() string {
 	if c.Err != nil {
 		return c.Err.Error()
+	} else if c.rsp.Code == CodeServiceError {
+		return fmt.Sprintf("service error: %v", c.ErrorData.Error())
 	}
-	if len(c.rsp.Data) == 0 {
-		return fmt.Sprintf("service error: %v", c.rsp.Code)
-	}
-	return fmt.Sprintf("service error: %v (%v)", c.rsp.Code, string(c.rsp.Data))
+	return fmt.Sprintf("request %d: %s", c.rsp.RequestID, c.rsp.Code.String())
 }
 
 type peerContextKey struct{}

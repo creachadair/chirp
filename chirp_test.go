@@ -129,7 +129,7 @@ func TestCancellation(t *testing.T) {
 	// A should have replied with a cancellation Response for B's Request.
 	if diff := cmp.Diff([]packet{
 		// Response(1, CANCELED, 0, nil)
-		{T: chirp.PacketResponse, P: "\x00\x00\x00\x01\x03\x00\x00\x00"},
+		{T: chirp.PacketResponse, P: "\x00\x00\x00\x01\x03"},
 	}, bpkt); diff != "" {
 		t.Errorf("B packets (-want, +got):\n%s", diff)
 	}
@@ -373,13 +373,8 @@ func mustResponse(t *testing.T, spec string) *chirp.Response {
 	if err != nil {
 		t.Fatalf("invalid result code %q: %v", ps[0], err)
 	}
-	tag, err := strconv.Atoi(ps[1])
-	if err != nil {
-		t.Fatalf("Invalid tag %q: %v", ps[1], err)
-	}
 	return &chirp.Response{
 		Code: chirp.ResultCode(code),
-		Tag:  uint32(tag),
 		Data: []byte(strings.Join(ps[2:], " ")),
 	}
 }
