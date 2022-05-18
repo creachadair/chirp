@@ -53,9 +53,7 @@ type PacketLogger = func(pkt *Packet)
 // the remote peer. Both of these methods are safe for concurrent use by
 // multiple goroutines.
 type Peer struct {
-	in   interface{ Recv() (*Packet, error) }
-	done chan struct{}
-
+	in  interface{ Recv() (*Packet, error) }
 	out struct {
 		// Must hold the lock to send to or set ch.
 		sync.Mutex
@@ -87,7 +85,6 @@ func (p *Peer) Start(ch Channel) *Peer {
 
 	g := taskgroup.New(nil)
 	p.in = ch
-	p.done = make(chan struct{})
 	p.tasks = g
 	p.out.ch = ch
 	p.err = nil
@@ -170,7 +167,7 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (*Response,
 		}
 
 		// Closed without a response means there was a protocol fatal error.
-		<-p.done
+		p.tasks.Wait()
 		return nil, &CallError{Err: fmt.Errorf("call terminated: %w", p.err)}
 	}
 }
