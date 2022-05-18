@@ -114,7 +114,7 @@ The current protocol is Version 0, indicated by the packet header `CP\x00`.
 A Chirp protocol session begins by establishing a reliable, bidirectional, ordered channel carrying packets between a pair of peers.
 
 - **Reliable** means the channel must either deliver each packet sent, or must be marked closed and report an error. A closed channel is invalid and must report an error for any subsequent use.
-- **Bidirectional** means either peer may initiate sending of a packet on the channel at any time.
+- **Bidirectional** means packets can be sent and received on the channel concurrently. Sending MUST NOT block receiving and vice versa.
 - **Ordered** means packets sent by either peer must be delivered to the other peer in the order they were sent.
 - Each packet is transmitted whole, there are no fragments.
 
