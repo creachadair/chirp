@@ -221,13 +221,12 @@ func (p *Peer) HandlePacket(ptype PacketType, handler PacketHandler) *Peer {
 	return p
 }
 
-// LogPackets registers a callback that will be invoked for all packets
-// received from the remote peer, regardless of type (including packets that
-// will be discarded).
+// LogPacket registers a callback that will be invoked for all packets received
+// from the remote peer, regardless of type, including packets to be discarded.
 //
 // Passing a nil callback disables logging. The packet logger is invoked
 // synchronously with the processing of packets, prior to handling.
-func (p *Peer) LogPackets(log PacketLogger) *Peer {
+func (p *Peer) LogPacket(log PacketLogger) *Peer {
 	p.μ.Lock()
 	defer p.μ.Unlock()
 	p.plog = log

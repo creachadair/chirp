@@ -100,7 +100,7 @@ func TestCancellation(t *testing.T) {
 	wg.Add(3) // there are three packets exchanged below
 
 	var apkt []packet
-	loc.A.LogPackets(func(pkt *chirp.Packet) {
+	loc.A.LogPacket(func(pkt *chirp.Packet) {
 		apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
 		wg.Done()
 	}).Handle(300, func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
@@ -109,7 +109,7 @@ func TestCancellation(t *testing.T) {
 	})
 
 	var bpkt []packet
-	loc.B.LogPackets(func(pkt *chirp.Packet) {
+	loc.B.LogPacket(func(pkt *chirp.Packet) {
 		bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
 		wg.Done()
 	})
@@ -195,7 +195,7 @@ func TestCustomPacket(t *testing.T) {
 			got = append(got, pkt)
 			return nil
 		}).
-		LogPackets(func(pkt *chirp.Packet) {
+		LogPacket(func(pkt *chirp.Packet) {
 			log = append(log, pkt)
 		})
 
