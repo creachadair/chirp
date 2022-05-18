@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
+	"github.com/creachadair/taskgroup"
 )
 
 // A Channel is a reliable ordered stream of packets shared by two peers.
@@ -59,13 +61,13 @@ type Peer struct {
 		sync.Mutex
 		ch Channel
 	}
+	tasks *taskgroup.Group
 
 	μ sync.Mutex
 
-	err error // protocol fatal error
-
-	ocall map[uint32]pending
-	nexto uint32
+	err   error                        // protocol fatal error
+	ocall map[uint32]pending           // outbound calls pending responses
+	nexto uint32                       // next unused outbound call ID
 	icall map[uint32]func()            // requestID → cancel func
 	imux  map[uint32]Handler           // methodID → handler
 	pmux  map[PacketType]PacketHandler // packetType → packet handler
@@ -83,28 +85,29 @@ func (p *Peer) Start(ch Channel) *Peer {
 		panic("peer is already started")
 	}
 
+	g := taskgroup.New(nil)
 	p.in = ch
 	p.done = make(chan struct{})
+	p.tasks = g
 	p.out.ch = ch
 	p.err = nil
 	p.ocall = make(map[uint32]pending)
 	p.nexto = 0
 	p.icall = make(map[uint32]func())
 
-	go func() {
-		defer close(p.done)
+	g.Go(func() error {
 		for {
 			pkt, err := p.in.Recv()
 			if err != nil {
 				p.fail(err)
-				return
+				return nil
 			}
 			if err := p.dispatchPacket(pkt); err != nil {
 				p.fail(err)
-				return
+				return nil
 			}
 		}
-	}()
+	})
 
 	return p
 }
@@ -119,7 +122,7 @@ func (p *Peer) Wait() error {
 	if p.in == nil {
 		return nil
 	}
-	<-p.done // service routine has exited
+	p.tasks.Wait() // service routine has exited
 
 	if errors.Is(p.err, net.ErrClosed) {
 		return nil
@@ -127,7 +130,7 @@ func (p *Peer) Wait() error {
 
 	// Clean up peer state so it can be garbage collected.
 	p.in = nil
-	p.done = nil
+	p.tasks = nil
 	p.out.ch = nil
 	p.ocall = nil
 	p.icall = nil
@@ -351,7 +354,7 @@ func (p *Peer) dispatchRequest(req *Request) error {
 	ctx, cancel := context.WithCancel(pctx)
 	p.icall[req.RequestID] = cancel
 
-	go func() {
+	p.tasks.Go(func() error {
 		defer cancel()
 
 		var tag uint32
@@ -390,7 +393,8 @@ func (p *Peer) dispatchRequest(req *Request) error {
 				Data:      []byte(err.Error()),
 			})
 		}
-	}()
+		return nil
+	})
 	return nil
 }
 
