@@ -218,19 +218,49 @@ func TestCustomPacket(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
-	defer leaktest.Check(t)()
+	t.Run("Local", func(t *testing.T) {
+		defer leaktest.Check(t)()
 
-	loc := peers.NewLocal()
-	defer loc.Stop()
+		loc := peers.NewLocal()
+		defer loc.Stop()
 
-	// To give the race detector something to push against, make the peers call
-	// each other lots of times concurrently and wait for the responses.
-	loc.A.Handle(100, slowEcho)
-	loc.B.Handle(200, slowEcho)
+		loc.A.Handle(100, slowEcho)
+		loc.B.Handle(200, slowEcho)
+
+		runConcurrent(t, loc.A, loc.B)
+	})
+
+	t.Run("Pipe", func(t *testing.T) {
+		defer leaktest.Check(t)()
+
+		ar, bw := io.Pipe()
+		br, aw := io.Pipe()
+		pa := chirp.NewPeer().Start(channel.IO(ar, aw))
+		pb := chirp.NewPeer().Start(channel.IO(br, bw))
+		defer func() {
+			if err := pa.Stop(); err != nil {
+				t.Errorf("A stop: %v", err)
+			}
+			if err := pb.Stop(); err != nil {
+				t.Errorf("B stop: %v", err)
+			}
+		}()
+
+		pa.Handle(100, slowEcho)
+		pb.Handle(200, slowEcho)
+
+		runConcurrent(t, pa, pb)
+	})
+}
+
+func runConcurrent(t *testing.T, pa, pb *chirp.Peer) {
+	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// To give the race detector something to push against, make the peers call
+	// each other lots of times concurrently and wait for the responses.
 	const numCalls = 128 // per peer
 
 	calls := taskgroup.New(taskgroup.Trigger(cancel))
@@ -239,7 +269,7 @@ func TestConcurrency(t *testing.T) {
 		// Send calls from A to B.
 		ab := fmt.Sprintf("ab-call-%d", i+1)
 		calls.Go(func() error {
-			rsp, err := loc.A.Call(ctx, 200, []byte(ab))
+			rsp, err := pa.Call(ctx, 200, []byte(ab))
 			if err != nil {
 				return err
 			} else if got := string(rsp.Data); got != ab {
@@ -251,7 +281,7 @@ func TestConcurrency(t *testing.T) {
 		// Send calls from B to A.
 		ba := fmt.Sprintf("ba-call-%d", i+1)
 		calls.Go(func() error {
-			rsp, err := loc.B.Call(ctx, 100, []byte(ba))
+			rsp, err := pb.Call(ctx, 100, []byte(ba))
 			if err != nil {
 				return err
 			} else if got := string(rsp.Data); got != ba {
