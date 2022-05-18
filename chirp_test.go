@@ -15,11 +15,14 @@ import (
 	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/chirp/peers"
 	"github.com/creachadair/taskgroup"
+	"github.com/fortytw2/leaktest"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestPeer(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	loc := peers.NewLocal()
 	defer func() {
 		if err := loc.Stop(); err != nil {
@@ -74,6 +77,8 @@ func TestPeer(t *testing.T) {
 }
 
 func TestCallTimeout(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
@@ -103,6 +108,8 @@ func TestCallTimeout(t *testing.T) {
 }
 
 func TestProtocolFatal(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	t.Run("BadMagic", func(t *testing.T) {
 		tw, ch := rawChannel()
 		p := new(chirp.Peer).Start(ch)
@@ -192,6 +199,8 @@ func TestCustomPacket(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
