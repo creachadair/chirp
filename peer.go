@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 
@@ -121,7 +122,7 @@ func (p *Peer) Wait() error {
 	}
 	p.tasks.Wait() // service routine has exited
 
-	if errors.Is(p.err, net.ErrClosed) {
+	if errors.Is(p.err, io.EOF) || errors.Is(p.err, net.ErrClosed) {
 		return nil
 	}
 
