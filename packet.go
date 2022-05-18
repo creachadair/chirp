@@ -92,17 +92,14 @@ type Request struct {
 	Data      []byte
 }
 
-func (r *Request) encode() []byte {
+// Encode encodes the request data in binary format.
+func (r Request) Encode() []byte {
 	buf := make([]byte, 8+len(r.Data)) // 4 request ID, 4 method ID
 	binary.BigEndian.PutUint32(buf[0:], r.RequestID)
 	binary.BigEndian.PutUint32(buf[4:], r.MethodID)
 	copy(buf[8:], r.Data)
 	return buf
 }
-
-// MarshalBinary encodes the request payload in the Chirp v0 binary format.
-// It implements encoding.BinaryMarshaler.
-func (r *Request) MarshalBinary() ([]byte, error) { return r.encode(), nil }
 
 // UnmarshalBinary decodes data into a Chirp v0 request payload.
 // It implements encoding.BinaryUnmarshaler.
@@ -124,39 +121,28 @@ func (r *Request) UnmarshalBinary(data []byte) error {
 type Response struct {
 	RequestID uint32
 	Code      ResultCode
-	Tag       uint32
 	Data      []byte
 }
 
-func (r *Response) encode() []byte {
-	buf := make([]byte, 8+len(r.Data)) // 4 request ID, 1 code, 3 tag
+// Encode encodes the response data in binary format.
+func (r Response) Encode() []byte {
+	buf := make([]byte, 5+len(r.Data)) // 4 request ID, 1 code
 	binary.BigEndian.PutUint32(buf[0:], r.RequestID)
-	binary.BigEndian.PutUint32(buf[4:], uint32(r.Code)<<24|r.Tag)
-	copy(buf[8:], r.Data)
+	buf[4] = byte(r.Code)
+	copy(buf[5:], r.Data)
 	return buf
-}
-
-// MarshalBinary encodes the response payload in the Chirp v0 binary format.
-// It impements encoding.BinaryMarshaler.
-func (r *Response) MarshalBinary() ([]byte, error) {
-	if r.Tag > 0xffffff {
-		return nil, fmt.Errorf("tag %x out of range", r.Tag)
-	}
-	return r.encode(), nil
 }
 
 // UnmarshalBinary decodes data into a Chirp v0 response payload.
 // It implements encoding.BinaryUnmarshaler.
 func (r *Response) UnmarshalBinary(data []byte) error {
-	if len(data) < 8 { // 4 request ID, 1 code, 3 tag
+	if len(data) < 5 { // 4 request ID, 1 code
 		return fmt.Errorf("short response payload (%d bytes)", len(data))
 	}
 	r.RequestID = binary.BigEndian.Uint32(data[0:])
-	codeTag := binary.BigEndian.Uint32(data[4:])
-	r.Code = ResultCode(codeTag >> 24)
-	r.Tag = codeTag &^ 0xff000000
-	if len(data[8:]) > 0 {
-		r.Data = data[8:]
+	r.Code = ResultCode(data[4])
+	if len(data[5:]) > 0 {
+		r.Data = data[5:]
 	} else {
 		r.Data = nil
 	}
@@ -197,15 +183,12 @@ type Cancel struct {
 	RequestID uint32
 }
 
-func (c *Cancel) encode() []byte {
+// Encode encodes the cancel request data in binary format.
+func (c Cancel) Encode() []byte {
 	var buf [4]byte
 	binary.BigEndian.PutUint32(buf[:], c.RequestID)
 	return buf[:]
 }
-
-// MarshalBinary encodes the cancel payload in the Chirp v0 binary format.
-// It impements encoding.BinaryMarshaler.
-func (c *Cancel) MarshalBinary() ([]byte, error) { return c.encode(), nil }
 
 // UnmarshalBinary decodes data into a Chirp v0 cancel payload.
 // It impements encoding.BinaryUnmarshaler.
@@ -214,5 +197,58 @@ func (c *Cancel) UnmarshalBinary(data []byte) error {
 		return fmt.Errorf("invalid cancel payload (%d bytes)", len(data))
 	}
 	c.RequestID = binary.BigEndian.Uint32(data)
+	return nil
+}
+
+// ErrorData is the response data format for a service error response.
+type ErrorData struct {
+	Code    uint16
+	Message string
+	Data    []byte
+}
+
+// Error implements the error interface, allowing an ErrorData value to be used
+// as an error. This can be used by method handlers to control the error code
+// and auxiliary data reported to the caller.
+func (e ErrorData) Error() string {
+	if e.Code != 0 {
+		return fmt.Sprintf("[code %d] %s", e.Code, e.Message)
+	}
+	return e.Message
+}
+
+// Encode encodes the error data in binary format.
+func (e ErrorData) Encode() []byte {
+	mlen := len(e.Message)
+	buf := make([]byte, 4+mlen+len(e.Data)) // 2 code, 2 length
+	binary.BigEndian.PutUint16(buf[0:], e.Code)
+	binary.BigEndian.PutUint16(buf[2:], uint16(mlen))
+	copy(buf[4:], e.Message)
+	copy(buf[4+mlen:], e.Data)
+	return buf
+}
+
+// UnmarshalBinary decodes data into a Chirp v0 error data payload.
+// It implements encoding.BinaryUnmarshaler.
+func (e *ErrorData) UnmarshalBinary(data []byte) error {
+	// Special case: An empty message is accepted as encoding empty details.
+	if len(data) == 0 {
+		*e = ErrorData{}
+		return nil
+	} else if len(data) < 4 {
+		return fmt.Errorf("invalid error data (%d bytes)", len(data))
+	}
+
+	mlen := int(binary.BigEndian.Uint16(data[2:]))
+	if 2+mlen > len(data) {
+		return fmt.Errorf("error message truncated (%d > %d bytes)", 2+mlen, len(data))
+	}
+	e.Code = binary.BigEndian.Uint16(data[0:])
+	e.Message = string(data[4 : 4+mlen])
+	if d := data[4+mlen:]; len(data) != 0 {
+		e.Data = d
+	} else {
+		e.Data = nil
+	}
 	return nil
 }
