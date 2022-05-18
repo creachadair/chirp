@@ -17,7 +17,7 @@ This document uses key words as described in [RFC 2119](https://datatracker.ietf
         - [Protocol fatal](#protocol-fatal-conditions)
         - [Silent discard](#silent-discard-conditions)
         - [Error response](#error-response-conditions)
-    - [Call](#call)
+    - [Call subprotocol](#call-subprotocol)
         - [Cancellation](#cancellation)
     - [Custom subprotocols](#custom-subprotocols)
 
@@ -153,7 +153,7 @@ A peer MUST **respond with error** for:
 - A Request packet with a duplicated pending request ID (code 2).
 
 
-### Call
+### Call Subprotocol
 
 A **call** is a directional exchange between the two peers, consisting of a **request** and a corresponding **response**. This is the primary communication mechanism between peers, and a compliant peer MUST support the call subprotocol.  The peer that initiates the call is the **caller**, the peer that responds is the **callee**. Calls may propagate in either direction.
 
