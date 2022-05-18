@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,20 +77,33 @@ func TestPeer(t *testing.T) {
 	}
 }
 
-func TestCallTimeout(t *testing.T) {
+func TestCancellation(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
-	// Add a method handler that blocks until cancelled, then closes done.
-	// This affirms that cancellation is propagated to the remote peer.
-	done := make(chan bool, 1)
-	loc.A.Handle(300, func(ctx context.Context, _ *chirp.Request) (uint32, []byte, error) {
-		defer close(done)
+	type packet struct {
+		T chirp.PacketType
+		P string
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(3) // there are three packets exchanged below
+
+	var apkt []packet
+	loc.A.LogPackets(func(pkt *chirp.Packet) {
+		apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
+		wg.Done()
+	}).Handle(300, func(ctx context.Context, _ *chirp.Request) (uint32, []byte, error) {
 		<-ctx.Done()
-		done <- true
 		return 0, nil, ctx.Err()
+	})
+
+	var bpkt []packet
+	loc.B.LogPackets(func(pkt *chirp.Packet) {
+		bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
+		wg.Done()
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -99,11 +113,25 @@ func TestCallTimeout(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Got %+v, %v; want %v", rsp, err, context.DeadlineExceeded)
 	}
-	select {
-	case <-done:
-		t.Log("OK: Method handler was cancelled")
-	case <-time.After(5 * time.Second):
-		t.Fatal("Method handler was not cancelled in a timely fashion")
+
+	wg.Wait()
+
+	// B should have sent a Request followed by a Cancellation.
+	if diff := cmp.Diff([]packet{
+		// Request(1, 300, nil)
+		{T: chirp.PacketRequest, P: "\x00\x00\x00\x01\x00\x00\x01\x2c"},
+		// Cancel(1)
+		{T: chirp.PacketCancel, P: "\x00\x00\x00\x01"},
+	}, apkt); diff != "" {
+		t.Errorf("A packets (-want, +got):\n%s", diff)
+	}
+
+	// A should have replied with a cancellation Response for B's Request.
+	if diff := cmp.Diff([]packet{
+		// Response(1, CANCELED, 0, nil)
+		{T: chirp.PacketResponse, P: "\x00\x00\x00\x01\x03\x00\x00\x00"},
+	}, bpkt); diff != "" {
+		t.Errorf("B packets (-want, +got):\n%s", diff)
 	}
 }
 
