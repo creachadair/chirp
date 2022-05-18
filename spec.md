@@ -174,7 +174,7 @@ The sequence of operations for a call is:
 
 Once a call is either terminated or complete, the `id` value for that call is eligible for reuse.
 
-**Implementation note:** The rules above define the order of operations for a single call, but a call is not required to terminate or complete before another call (with a different request ID) can be initiated. Peers may initiate multiple calls concurrently in either direction, provided the request IDs are distinct.
+**Implementation note:** The rules above define the order of operations for a single call, but a call is not required to terminate or complete before another call (with a different request ID) can be initiated. Peers may initiate multiple calls concurrently, provided the request IDs are distinct.  The request IDs for inbound and outbound calls are independent, and may overlap, for example, peer A may send a request with ID 1 at the same time as peer B sends a request with ID 1. These are distinct requests, not duplicates.
 
 #### Cancellation
 
