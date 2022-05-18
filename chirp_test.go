@@ -33,7 +33,7 @@ func TestPeer(t *testing.T) {
 
 	// The test cases send a string in the requeset that is parsed by
 	// parseTestSpec (see below) to control what the handler returns.
-	loc.A.Handle(100, func(ctx context.Context, req *chirp.Request) (uint32, []byte, error) {
+	loc.A.Handle(100, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 		return parseTestSpec(ctx, string(req.Data))
 	})
 
@@ -43,16 +43,23 @@ func TestPeer(t *testing.T) {
 		input    string          // input for parseTestSpec (generates response)
 		want     *chirp.Response // expected response
 	}{
-		{loc.B, 10, "n/a", mustResponse(t, "1 0")}, // method not found
-		{loc.A, 20, "n/a", mustResponse(t, "1 0")}, // method not found
+		{loc.B, 10, "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
+		{loc.A, 20, "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
+		{loc.A, 100, "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
 
-		{loc.B, 100, "tag: 1023", mustResponse(t, "0 1023")},           // tag without data
-		{loc.B, 100, "ok: yay", mustResponse(t, "0 0 yay")},            // default tag plus data
-		{loc.B, 100, "ok: 617 cool", mustResponse(t, "0 617 cool")},    // tag plus data
-		{loc.B, 100, "error: failure", mustResponse(t, "4 0 failure")}, // ordinary error
-		{loc.B, 100, "peer?", mustResponse(t, "0 0 present")},          // check context peer
+		{loc.B, 100, "ok", &chirp.Response{}},                        // success, empty data
+		{loc.B, 100, "ok yay", &chirp.Response{Data: []byte("yay")}}, // success, non-empty data
 
-		{loc.A, 100, "ok: 617 cool", mustResponse(t, "1 0")}, // method not found
+		{loc.B, 100, "error failure", &chirp.Response{
+			Code: chirp.CodeServiceError,
+			Data: chirp.ErrorData{Message: "failure"}.Encode(),
+		}}, // service error, default handling
+		{loc.B, 100, "edata 17 hey stuff", &chirp.Response{
+			Code: chirp.CodeServiceError,
+			Data: chirp.ErrorData{Code: 17, Message: "hey", Data: []byte("stuff")}.Encode(),
+		}}, // service error, handler-provided code and data
+
+		{loc.B, 100, "peer?", &chirp.Response{Data: []byte("present")}}, // check context peer
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("method-%d-%s", test.methodID, test.input), func(t *testing.T) {
@@ -64,6 +71,7 @@ func TestPeer(t *testing.T) {
 				if !ok {
 					t.Fatalf("Call: got error %[1]T (%[1]v), want *CallError", err)
 				}
+				t.Logf("CallError: %v", ce)
 				rsp = ce.Response()
 			}
 
@@ -95,9 +103,9 @@ func TestCancellation(t *testing.T) {
 	loc.A.LogPackets(func(pkt *chirp.Packet) {
 		apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
 		wg.Done()
-	}).Handle(300, func(ctx context.Context, _ *chirp.Request) (uint32, []byte, error) {
+	}).Handle(300, func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
 		<-ctx.Done()
-		return 0, nil, ctx.Err()
+		return nil, ctx.Err()
 	})
 
 	var bpkt []packet
@@ -309,72 +317,54 @@ func mustErr(t *testing.T, err error, want string) {
 	}
 }
 
-func slowEcho(_ context.Context, req *chirp.Request) (uint32, []byte, error) {
+func slowEcho(_ context.Context, req *chirp.Request) ([]byte, error) {
 	time.Sleep(time.Duration(rand.Intn(100)+50) * time.Microsecond) // "work"
-	return 0, req.Data, nil
+	return req.Data, nil
 }
 
 // parseTestSpec parses a string giving test values to return from a method
 // handler, and returns those values.
 //
 // Grammar:
-//    ok:          -- return 0, nil, nil
-//    ok: text     -- return 0, text, nil
-//    ok: tag text -- return tag, text, nil
-//    tag: tag     -- return tag, nil, nil
-//    error: ...   -- return 0, nil, error(...)
-//    peer?        -- return 0, x, nil where x == "present"/"absent"
+//    ok text...        -- return text, nil
+//    error ...         -- return nil, error(...)
+//    edata c msg data  -- return nil, ErrorData{c, msg, data}
+//    peer?             -- return x, nil where x == "present"/"absent"
 //
 // Any other value causes a panic.
-func parseTestSpec(ctx context.Context, s string) (uint32, []byte, error) {
+func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
 	ps := strings.Fields(s)
 	switch ps[0] {
-	case "ok:":
+	case "ok":
 		if len(ps) == 1 {
-			return 0, nil, nil
-		} else if len(ps) == 2 {
-			return 0, []byte(ps[1]), nil
-		} else if len(ps) == 3 {
-			n, err := strconv.Atoi(ps[1])
-			if err == nil {
-				return uint32(n), []byte(ps[2]), nil
-			}
+			return nil, nil
 		}
+		return []byte(strings.Join(ps[1:], " ")), nil
 
-	case "tag:":
-		if len(ps) == 2 {
-			n, err := strconv.Atoi(ps[1])
-			if err == nil {
-				return uint32(n), nil, nil
-			}
+	case "error":
+		return nil, errors.New(strings.Join(ps[1:], " "))
+
+	case "edata":
+		if len(ps) != 4 {
+			break
+		}
+		c, err := strconv.ParseUint(ps[1], 10, 16)
+		if err != nil {
+			break
+		}
+		return nil, &chirp.ErrorData{
+			Code:    uint16(c),
+			Message: ps[2],
+			Data:    []byte(ps[3]),
 		}
 
 	case "peer?":
 		if len(ps) == 1 {
 			if chirp.ContextPeer(ctx) != nil {
-				return 0, []byte("present"), nil
+				return []byte("present"), nil
 			}
-			return 0, []byte("absent"), nil
+			return []byte("absent"), nil
 		}
-
-	case "error:":
-		return 0, nil, errors.New(strings.Join(ps[1:], " "))
 	}
 	panic(fmt.Sprintf("Invalid test spec %q", s))
-}
-
-func mustResponse(t *testing.T, spec string) *chirp.Response {
-	t.Helper()
-	ps := strings.Fields(spec)
-	if len(ps) < 2 { // code tag data ...
-		t.Fatalf("Invalid response spec %q", spec)
-	}
-	code, err := strconv.Atoi(ps[0])
-	if err != nil {
-		t.Fatalf("invalid result code %q: %v", ps[0], err)
-	}
-	return &chirp.Response{
-		Code: chirp.ResultCode(code),
-		Data: []byte(strings.Join(ps[2:], " ")),
-	}
 }

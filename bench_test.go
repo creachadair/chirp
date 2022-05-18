@@ -10,7 +10,7 @@ import (
 	"github.com/creachadair/chirp/peers"
 )
 
-func noop(context.Context, *chirp.Request) (uint32, []byte, error) { return 0, nil, nil }
+func noop(context.Context, *chirp.Request) ([]byte, error) { return nil, nil }
 
 func BenchmarkCall(b *testing.B) {
 	b.Run("Direct", func(b *testing.B) {
