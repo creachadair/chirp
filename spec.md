@@ -58,7 +58,7 @@ All packet type values from 0 to 127 inclusive are reserved by the protocol and 
 | 4      | 4     | Method ID (BE uint32)  |
 | 4      | rest  | Parameter data         |
 
-- The **Request ID** is an identifier assigned by the caller. It must be unique among pending requests, but the caller is otherwise free to reuse request IDs for requests that are not concurrent.
+- The **Request ID** is an identifier assigned by the caller. It must be unique among pending requests from that caller, but the caller is otherwise free to reuse request IDs for requests that are not concurrent.
 
 - The **Method ID** is a method identifier defined by the callee, opaque to the protocol.
 
@@ -200,19 +200,21 @@ While a call `id` is *pending*, the caller may request its cancellation. To do s
 
 - If `id` is unknown or has already completed, the callee MUST silently discard the packet.
 
-- Otherwise: If the call has not yet been dispatched to a handler, the callee MUST discard it and send `Response(id, CANCELED, nil)`. This terminates the call.
+- Otherwise: If the call has not yet been dispatched to a handler, the callee MUST discard it and send `Response(id, CANCELED, nil)`. This terminates the call for request `id`.
 
 - Otherwise: If the handler is running, the callee SHOULD attempt to *interrupt* the execution of the handler.
 
-  - If interruption is successful, the callee sends `Response(id, CANCELED, nil)`. This terminates the call.
+  - If interruption is successful, the callee sends `Response(id, CANCELED, nil)`. This terminates the call for request `id`.
 
-  - If interruption is not possible, the callee MAY send `Response(id, CANCELED, nil)` immediately and discard the handler result when it completes. This terminates the call.
+  - If interruption is not possible, the callee MAY send `Response(id, CANCELED, nil)` immediately and discard the handler result when it completes. This terminates the call for request `id`.
 
   - Otherwise, the callee MUST ignore the cancellation request and allow the handler to complete normally.
 
 - Otherwise: If the call handler has already completed, the handler SHOULD report its result as a normal response, completing the call. Alternatively, the callee MAY discard the result and send `Response(id, CANCELED, nil)` instead. This terminates the call.
 
 If cancellation succeeds, the cancellation response supersedes a handler response. Whether or not cancellation succeeds, the callee MUST NOT send multiple responses for the same request.
+
+**Implementation note:** The `Cancel(id)` packet is not itself a request and does not require its own reply.
 
 ### Custom Subprotocols
 
