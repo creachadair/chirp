@@ -57,6 +57,32 @@ func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 	return int64(nr), err
 }
 
+// String returns a human-friendly rendering of the packet.
+func (p *Packet) String() string {
+	var pay string
+	switch p.Type {
+	case PacketRequest:
+		var req Request
+		if err := req.UnmarshalBinary(p.Payload); err == nil {
+			pay = req.String()
+		}
+	case PacketCancel:
+		var can Cancel
+		if err := can.UnmarshalBinary(p.Payload); err == nil {
+			pay = can.String()
+		}
+	case PacketResponse:
+		var rsp Response
+		if err := rsp.UnmarshalBinary(p.Payload); err == nil {
+			pay = rsp.String()
+		}
+	}
+	if pay == "" {
+		pay = fmt.Sprint(p.Payload)
+	}
+	return fmt.Sprintf("Packet(CP%v, %v, %s)", p.Protocol, p.Type, pay)
+}
+
 // PacketType describes the structure type of a Chirp v0 packet.
 //
 // All packet type values from 0 to 127 inclusive are reserved by the protocol
@@ -75,13 +101,13 @@ const (
 func (p PacketType) String() string {
 	switch p {
 	case PacketRequest:
-		return "request"
+		return "REQUEST"
 	case PacketCancel:
-		return "cancel"
+		return "CANCEL"
 	case PacketResponse:
-		return "response"
+		return "RESPONSE"
 	default:
-		return fmt.Sprintf("packet type %d", byte(p))
+		return fmt.Sprintf("PACKET:%d", byte(p))
 	}
 }
 
@@ -117,6 +143,11 @@ func (r *Request) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// String returns a human-friendly rendering of the request.
+func (r Request) String() string {
+	return fmt.Sprintf("Request(ID=%v, Method=%v, Data=%+v)", r.RequestID, r.MethodID, r.Data)
+}
+
 // Response is the payload format for a Chirp v0 response packet.
 type Response struct {
 	RequestID uint32
@@ -147,6 +178,11 @@ func (r *Response) UnmarshalBinary(data []byte) error {
 		r.Data = nil
 	}
 	return nil
+}
+
+// String returns a human-friendly rendering of the response.
+func (r Response) String() string {
+	return fmt.Sprintf("Response(ID=%v, Code=%v, Data=%+v)", r.RequestID, r.Code, r.Data)
 }
 
 // ResultCode describes the result status of a completed call.  All result
@@ -199,6 +235,9 @@ func (c *Cancel) UnmarshalBinary(data []byte) error {
 	c.RequestID = binary.BigEndian.Uint32(data)
 	return nil
 }
+
+// String returns a human-friendly rendering of the cancellation.
+func (c Cancel) String() string { return fmt.Sprintf("Cancel(ID=%v)", c.RequestID) }
 
 // ErrorData is the response data format for a service error response.
 type ErrorData struct {
