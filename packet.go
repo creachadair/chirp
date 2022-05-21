@@ -107,7 +107,7 @@ func (p PacketType) String() string {
 	case PacketResponse:
 		return "RESPONSE"
 	default:
-		return fmt.Sprintf("PACKET:%d", byte(p))
+		return fmt.Sprintf("TYPE:%d", byte(p))
 	}
 }
 
