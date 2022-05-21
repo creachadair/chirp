@@ -458,20 +458,20 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		p.μ.Lock()
 		handler, ok := p.pmux[pkt.Type]
 		p.μ.Unlock()
-
-		if ok {
-			pctx := context.WithValue(p.base(), peerContextKey{}, p)
-			return func() (err error) {
-				// Ensure a panic out of a packet handler is turned into a protocol fatal.
-				defer func() {
-					if x := recover(); x != nil && err == nil {
-						err = fmt.Errorf("packet handler panicked (recovered): %v", x)
-					}
-				}()
-				return handler(pctx, pkt)
-			}()
+		if !ok {
+			break // ignore the packet
 		}
-		// fall through and ignore the packet
+
+		pctx := context.WithValue(p.base(), peerContextKey{}, p)
+		return func() (err error) {
+			// Ensure a panic out of a packet handler is turned into a protocol fatal.
+			defer func() {
+				if x := recover(); x != nil && err == nil {
+					err = fmt.Errorf("packet handler panicked (recovered): %v", x)
+				}
+			}()
+			return handler(pctx, pkt)
+		}()
 	}
 	return nil
 }
