@@ -273,10 +273,13 @@ func (e ErrorData) Error() string {
 // Encode encodes the error data in binary format.
 func (e ErrorData) Encode() []byte {
 	mlen := len(e.Message)
+	if mlen > 65535 {
+		mlen = 65535 // clip message to fit
+	}
 	buf := make([]byte, 4+mlen+len(e.Data)) // 2 code, 2 length
 	binary.BigEndian.PutUint16(buf[0:], e.Code)
 	binary.BigEndian.PutUint16(buf[2:], uint16(mlen))
-	copy(buf[4:], e.Message)
+	copy(buf[4:], e.Message[:mlen])
 	copy(buf[4+mlen:], e.Data)
 	return buf
 }
