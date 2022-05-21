@@ -225,6 +225,31 @@ func TestCustomPacket(t *testing.T) {
 	}
 }
 
+func TestContextPlumbing(t *testing.T) {
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	type testKey struct{}
+	loc.A.
+		NewContext(func() context.Context {
+			// Attach a known value to the base context.
+			return context.WithValue(context.Background(), testKey{}, "ok")
+		}).
+		Handle(100, func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+			// Verify that the base context is visible from ctx.
+			v, ok := ctx.Value(testKey{}).(string)
+			if !ok || v != "ok" {
+				t.Error("Base context was not correctly plumbed")
+			}
+			return nil, nil
+		})
+
+	_, err := loc.B.Call(context.Background(), 100, nil)
+	if err != nil {
+		t.Fatalf("Call failed: %v", err)
+	}
+}
+
 func TestConcurrency(t *testing.T) {
 	t.Run("Local", func(t *testing.T) {
 		defer leaktest.Check(t)()

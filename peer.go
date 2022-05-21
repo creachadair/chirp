@@ -71,6 +71,7 @@ type Peer struct {
 	imux  map[uint32]Handler           // methodID → handler
 	pmux  map[PacketType]PacketHandler // packetType → packet handler
 	plog  PacketLogger                 // what it says on the tin
+	base  func() context.Context       // return a new base context
 }
 
 // NewPeer constructs a new unstarted peer.
@@ -92,6 +93,7 @@ func (p *Peer) Start(ch Channel) *Peer {
 	p.ocall = make(map[uint32]pending)
 	p.nexto = 0
 	p.icall = make(map[uint32]func())
+	p.base = context.Background
 
 	g.Go(func() error {
 		for {
@@ -233,6 +235,19 @@ func (p *Peer) LogPacket(log PacketLogger) *Peer {
 	return p
 }
 
+// NewContext registers a function that will be called to create a new base
+// context for method handlers. If it is not set a background context is used.
+func (p *Peer) NewContext(base func() context.Context) *Peer {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	if base == nil {
+		p.base = context.Background
+	} else {
+		p.base = base
+	}
+	return p
+}
+
 // fail terminates all pending calls and updates the failure status.
 func (p *Peer) fail(err error) {
 	p.closeOut()
@@ -350,7 +365,7 @@ func (p *Peer) dispatchRequest(req *Request) error {
 
 	// Start a goroutine to service the request. The goroutine handles
 	// cancellation and response delivery.
-	pctx := context.WithValue(context.Background(), peerContextKey{}, p)
+	pctx := context.WithValue(p.base(), peerContextKey{}, p)
 	ctx, cancel := context.WithCancel(pctx)
 	p.icall[req.RequestID] = cancel
 
@@ -445,7 +460,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		p.μ.Unlock()
 
 		if ok {
-			pctx := context.WithValue(context.Background(), peerContextKey{}, p)
+			pctx := context.WithValue(p.base(), peerContextKey{}, p)
 			return func() (err error) {
 				// Ensure a panic out of a packet handler is turned into a protocol fatal.
 				defer func() {
