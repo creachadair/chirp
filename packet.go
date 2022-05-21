@@ -182,7 +182,17 @@ func (r *Response) UnmarshalBinary(data []byte) error {
 
 // String returns a human-friendly rendering of the response.
 func (r Response) String() string {
-	return fmt.Sprintf("Response(ID=%v, Code=%v, Data=%+v)", r.RequestID, r.Code, r.Data)
+	var data string
+	if r.Code == CodeServiceError {
+		var ed ErrorData
+		if ed.UnmarshalBinary(r.Data) == nil {
+			data = fmt.Sprintf("ErrorData(Code=%d, [%d bytes], %q)", ed.Code, len(ed.Data), ed.Message)
+		}
+	}
+	if data == "" {
+		data = fmt.Sprintf("Data=%+v", r.Data)
+	}
+	return fmt.Sprintf("Response(ID=%v, Code=%v, %s)", r.RequestID, r.Code, data)
 }
 
 // ResultCode describes the result status of a completed call.  All result
