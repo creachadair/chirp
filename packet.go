@@ -190,7 +190,11 @@ func (r Response) String() string {
 		}
 	}
 	if data == "" {
-		data = fmt.Sprintf("Data=%+v", r.Data)
+		if len(r.Data) > 16 {
+			data = fmt.Sprintf("Data=%+v ...", r.Data[:16])
+		} else {
+			data = fmt.Sprintf("Data=%+v", r.Data)
+		}
 	}
 	return fmt.Sprintf("Response(ID=%v, Code=%v, %s)", r.RequestID, r.Code, data)
 }
