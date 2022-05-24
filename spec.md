@@ -1,6 +1,6 @@
 # Chirp v0 Specification
 
-Chirp is a lightweight remote procedure call protocol. Peers exchange binary packets over a shared channel, following the packet format described below. The protocol is intended to be easy to implement in a variety of different languages and to perform efficiently over stream-oriented local transport mechanisms such as sockets and pipes. The packet format is byte-oriented and uses fixed header formats to minimize the amount of bit-level manipulation necessary to encode and decode packets.
+Chirp is a lightweight remote procedure call protocol. Peers exchange binary packets over a shared channel, following the packet format described below. The protocol is intended to be easy to implement in a variety of different languages and to perform efficiently over bidirectional stream-oriented local transport mechanisms such as sockets and pipes. The packet format is byte-oriented and uses fixed header formats to minimize the amount of bit-level manipulation necessary to encode and decode packets.
 
 This document uses key words as described in [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119).
 
@@ -24,7 +24,7 @@ This document uses key words as described in [RFC 2119](https://datatracker.ietf
 
 ## Packet Format
 
-A packet is an array of bytes.
+A packet is an array of bytes with the following structure:
 
 | Offset | Bytes | Description                     |
 |--------|-------|---------------------------------|
@@ -105,12 +105,12 @@ A **service error** occurs when a method handler fails to complete normally (for
 
 ### Error Data
 
-| Offset | Bytes | Description                    |
-|--------|-------|--------------------------------|
-| 0      | 2     | Error code (BE uint16)         |
-| 2      | 2     | Message length (BE uint16 = m) |
-| 4      | m     | Description (UTF-8 text)       |
-| 4+m    | rest  | Auxuiliary data                |
+| Offset | Bytes | Description                        |
+|--------|-------|------------------------------------|
+| 0      | 2     | Error code (BE uint16)             |
+| 2      | 2     | Description length (BE uint16 = m) |
+| 4      | m     | Description (UTF-8 text)           |
+| 4+m    | rest  | Auxuiliary data                    |
 
 - The **Error code** is an uninterpreted machine-readable error code describing the meaning of the error. The implementation SHOULD permit the method handler to choose this value; otherwise the implementation SHOULD set this field to 0.
 
@@ -140,7 +140,7 @@ While a session is active, each peer processes the packets sent by the other pee
 
 ### Error Handling
 
-Basic errors in the protocol implementation are **protocol fatal**. For a protocol fatal error, the peer MUST immediately terminate the channel and report or log an error to the host. Protocol fatal errors are the result of an incorrect peer implementation rather than host code.
+Basic errors in the protocol implementation are **protocol fatal**. For a protocol fatal error, the peer MUST immediately terminate the channel and report or log an error to the host. Protocol fatal errors are the result of channel failures, resource exhaustion, oran incorrect peer implementation rather than host code.
 
 To **silently discard** a packet means that the receiving peer MUST fully consume the packet and MUST NOT send a response to the sending peer. The channel is not closed. The receiving peer is free to log or otherwise report the packet to the host.
 
@@ -186,9 +186,11 @@ The sequence of operations for a call is:
 
    - If the handler completes with result `R`, the callee sends `Response(id, SUCCESS, R)`. This completes the call.
 
-     N.B.: A successful protocol call may still report a service error to the caller within the result.
+     N.B.: A successful protocol call may still report an application-specific error to the caller as a variant within the successful result.
 
-   - If the handler does not complete or reports an error instead of a result, the callee sends `Response(id, SERVICE_ERROR, nil)`. This completes the call.
+   - If the handler terminates abnormally (for example via an exception or a panic), the callee sends `Response(id, SERVICE_ERROR, E)` where `E` is either empty or `Error(C, desc, data)` for an implementation-defined choice of code `C`, human readable description message `desc`, and ancillary data `data`.  This completes the call.
+
+   - If the handler reports an error instead of a result, the callee sends `Response(id, SERVICE_ERROR, E)` where `E` is either empty or `Error(C, desc, data)` for a handler-defined choice of code `C`, human-readable description message `desc`, and ancillary data `data`.  This completes the call.
 
 Once a call is either terminated or complete, the `id` value for that call is eligible for reuse.
 
