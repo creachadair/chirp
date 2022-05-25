@@ -99,16 +99,6 @@ A request **succeeds** if its request ID is not a duplicate, the method ID is kn
 
 A **service error** occurs when a method handler fails to complete normally (for example, as a result of a panic or exception), or otherwise reports an error without producing a result. In this case, the implementation MUST set the response code to 4 (Service error) and the response data to an [Error](#error-data).
 
-### Cancel Payload
-
-The payload of a Cancel packet has the following structure:
-
-| Offset | Bytes | Description            |
-|--------|-------|------------------------|
-| 0      | 4     | Request ID (BE uint32) |
-
-- The **Request ID** identifies which pending request to cancel.
-
 ### Error Data
 
 The response data in case of a service error uses the following structure:
@@ -127,6 +117,16 @@ The response data in case of a service error uses the following structure:
 - The **Auxiliary data** are an uninterpreted sequence of bytes chosen by the handler (empty OK).
 
 As a special case, then implementation SHALL treat an empty byte array as a valid encoding for error data with error code 0, an empty description, and empty auxiliary data.
+
+### Cancel Payload
+
+The payload of a Cancel packet has the following structure:
+
+| Offset | Bytes | Description            |
+|--------|-------|------------------------|
+| 0      | 4     | Request ID (BE uint32) |
+
+- The **Request ID** identifies which pending request to cancel.
 
 
 ## Protocol Definition
