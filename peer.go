@@ -152,13 +152,13 @@ func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
 func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (*Response, error) {
 	id, pc, err := p.sendReq(method, data)
 	if err != nil {
-		return nil, &CallError{Err: err}
+		return nil, callError(err)
 	}
 
 	select {
 	case <-ctx.Done():
 		// The local context ended, push a cancellation to the peer.
-		return nil, &CallError{Err: p.sendCancel(ctx, id)}
+		return nil, callError(p.sendCancel(ctx, id))
 
 	case rsp, ok := <-pc:
 		if ok {
@@ -174,7 +174,7 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (*Response,
 
 		// Closed without a response means there was a protocol fatal error.
 		p.tasks.Wait()
-		return nil, &CallError{Err: fmt.Errorf("call terminated: %w", p.err)}
+		return nil, callError(fmt.Errorf("call terminated: %w", p.err))
 	}
 }
 
@@ -502,6 +502,8 @@ func (p *Peer) closeOut() {
 type pending chan *Response
 
 func (p pending) deliver(r *Response) { p <- r; close(p) }
+
+func callError(err error) *CallError { return &CallError{Err: err} }
 
 // CallError is the concrete type of errors reported by the Call method of a
 // Peer.  For a protocol fatal error, the Err field gives the underlying error
