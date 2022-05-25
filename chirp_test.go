@@ -148,7 +148,7 @@ func TestProtocolFatal(t *testing.T) {
 
 	t.Run("BadMagic", func(t *testing.T) {
 		tw, ch := rawChannel()
-		p := new(chirp.Peer).Start(ch)
+		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
 		tw.Write([]byte{'C', 'P', 1, 2, 0, 0, 0, 0})
@@ -157,7 +157,7 @@ func TestProtocolFatal(t *testing.T) {
 
 	t.Run("ShortHeader", func(t *testing.T) {
 		tw, ch := rawChannel()
-		p := new(chirp.Peer).Start(ch)
+		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
 		tw.Write([]byte{'C', 'P', 0, 2, 0, 0})
@@ -167,7 +167,7 @@ func TestProtocolFatal(t *testing.T) {
 
 	t.Run("ShortPayload", func(t *testing.T) {
 		tw, ch := rawChannel()
-		p := new(chirp.Peer).Start(ch)
+		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
 		tw.Write([]byte{'C', 'P', 0, 2, 0, 0, 0, 10, 'a', 'b', 'c', 'd'})
@@ -177,11 +177,37 @@ func TestProtocolFatal(t *testing.T) {
 
 	t.Run("BadRequest", func(t *testing.T) {
 		tw, ch := rawChannel()
-		p := new(chirp.Peer).Start(ch)
+		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
 		tw.Write([]byte{'C', 'P', 0, 2, 0, 0, 0, 1, 'X'})
 		mustErr(t, p.Wait(), "short request payload")
+	})
+
+	t.Run("ClosedOutbound", func(t *testing.T) {
+		pr, tw := io.Pipe()
+		tr, pw := io.Pipe()
+		ch := channel.IO(pr, pw)
+		p := chirp.NewPeer().Handle(22, stall).Start(ch)
+		defer p.Stop()
+
+		tw.Write(chirp.Packet{
+			Type:    chirp.PacketRequest,
+			Payload: chirp.Request{RequestID: 666, MethodID: 22}.Encode(),
+		}.Encode())
+
+		// When the channel terminates, all pending outbound calls must fail and
+		// report errors. Simulate this by closing the pipe.
+		time.AfterFunc(100*time.Millisecond, func() { tw.Close() })
+
+		var buf [64]byte
+		nr, err := tr.Read(buf[:])
+		if err != nil {
+			t.Logf("Response correctly failed: %v", err)
+		} else {
+			t.Errorf("Got response %#q, wanted error", string(buf[:nr]))
+		}
+		p.Stop()
 	})
 }
 
@@ -340,6 +366,11 @@ func mustErr(t *testing.T, err error, want string) {
 	} else if !strings.Contains(err.Error(), want) {
 		t.Fatalf("Got %v, want %v", err, want)
 	}
+}
+
+func stall(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
 }
 
 func slowEcho(_ context.Context, req *chirp.Request) ([]byte, error) {
