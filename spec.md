@@ -52,6 +52,8 @@ All packet type values from 0 to 127 inclusive are reserved by the protocol and 
 
 ### Request Payload
 
+The payload of a Request packet has the following structure:
+
 | Offset | Bytes | Description            |
 |--------|-------|------------------------|
 | 0      | 4     | Request ID (BE uint32) |
@@ -65,6 +67,8 @@ All packet type values from 0 to 127 inclusive are reserved by the protocol and 
 - The **Parameter data** are an uninterpreted sequence of bytes (empty OK).
 
 ### Response Payload
+
+The payload of a Response packet has the following structure:
 
 | Offset | Bytes | Description            |
 | ------ | ----  | ---------------------- |
@@ -97,6 +101,8 @@ A **service error** occurs when a method handler fails to complete normally (for
 
 ### Cancel Payload
 
+The payload of a Cancel packet has the following structure:
+
 | Offset | Bytes | Description            |
 |--------|-------|------------------------|
 | 0      | 4     | Request ID (BE uint32) |
@@ -104,6 +110,8 @@ A **service error** occurs when a method handler fails to complete normally (for
 - The **Request ID** identifies which pending request to cancel.
 
 ### Error Data
+
+The response data in case of a service error uses the following structure:
 
 | Offset | Bytes | Description                        |
 |--------|-------|------------------------------------|
