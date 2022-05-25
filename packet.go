@@ -1,6 +1,7 @@
 package chirp
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -11,6 +12,15 @@ type Packet struct {
 	Protocol byte
 	Type     PacketType
 	Payload  []byte
+}
+
+// Encode encodes p in binary format.
+func (p Packet) Encode() []byte {
+	var buf bytes.Buffer
+	if _, err := p.WriteTo(&buf); err != nil {
+		panic(fmt.Errorf("encoding packet: %w", err))
+	}
+	return buf.Bytes()
 }
 
 // WriteTo writes the packet to w in binary format. It satisfies io.WriterTo.
