@@ -184,7 +184,16 @@ func TestProtocolFatal(t *testing.T) {
 		mustErr(t, p.Wait(), "short request payload")
 	})
 
-	t.Run("ClosedOutbound", func(t *testing.T) {
+	t.Run("CloseChannel", func(t *testing.T) {
+		ready := make(chan struct{})
+		done := make(chan struct{})
+		stall := func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+			defer close(done)
+			close(ready)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+
 		pr, tw := io.Pipe()
 		tr, pw := io.Pipe()
 		ch := channel.IO(pr, pw)
@@ -196,16 +205,27 @@ func TestProtocolFatal(t *testing.T) {
 			Payload: chirp.Request{RequestID: 666, MethodID: 22}.Encode(),
 		}.Encode())
 
-		// When the channel terminates, all pending outbound calls must fail and
-		// report errors. Simulate this by closing the pipe.
+		// Wait for the method handler to be running.
+		<-ready
+
+		// Simulate the channel failing by closing the pipe.
 		time.AfterFunc(100*time.Millisecond, func() { tw.Close() })
 
+		// Outbound calls MUST fail and report an error.
 		var buf [64]byte
 		nr, err := tr.Read(buf[:])
 		if err != nil {
 			t.Logf("Response correctly failed: %v", err)
 		} else {
 			t.Errorf("Got response %#q, wanted error", string(buf[:nr]))
+		}
+
+		// Inbound calls MUST be cancelled and their results discarded.
+		select {
+		case <-done:
+			t.Log("Handler exited OK")
+		case <-time.After(time.Second):
+			t.Error("Timed out waiting for handler to exit")
 		}
 		p.Stop()
 	})
@@ -366,11 +386,6 @@ func mustErr(t *testing.T, err error, want string) {
 	} else if !strings.Contains(err.Error(), want) {
 		t.Fatalf("Got %v, want %v", err, want)
 	}
-}
-
-func stall(ctx context.Context, _ *chirp.Request) ([]byte, error) {
-	<-ctx.Done()
-	return nil, ctx.Err()
 }
 
 func slowEcho(_ context.Context, req *chirp.Request) ([]byte, error) {
