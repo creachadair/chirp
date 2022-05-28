@@ -296,6 +296,45 @@ func TestContextPlumbing(t *testing.T) {
 	}
 }
 
+func TestCallback(t *testing.T) {
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	const numCallbacks = 5
+
+	caller := func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		peer := chirp.ContextPeer(ctx)
+
+		v, err := strconv.Atoi(string(req.Data))
+		if err != nil {
+			return nil, err
+		} else if v == numCallbacks {
+			t.Logf("Peer %p complete (v=%d)", peer, numCallbacks)
+			return []byte("ok"), nil
+		}
+
+		t.Logf("Peer %p callback v=%d", peer, v)
+		rsp, err := peer.Call(ctx, req.MethodID, []byte(strconv.Itoa(v+1)))
+		if err != nil {
+			return nil, err
+		}
+		return rsp.Data, nil
+	}
+
+	// Each peer will ping-pong callbacks until the threshold has been reached,
+	// then unwind returning the result from the furthest call all the way back
+	// to the initial caller.
+	loc.A.Handle(100, caller).LogPacket(logPacket(t, "Peer A"))
+	loc.B.Handle(100, caller).LogPacket(logPacket(t, "Peer B"))
+
+	rsp, err := loc.A.Call(context.Background(), 100, []byte("0"))
+	if err != nil {
+		t.Fatalf("Call failed: %v", err)
+	} else if got, want := string(rsp.Data), "ok"; got != want {
+		t.Errorf("Call result: got %q, want %q", got, want)
+	}
+}
+
 func TestConcurrency(t *testing.T) {
 	t.Run("Local", func(t *testing.T) {
 		defer leaktest.Check(t)()
@@ -438,4 +477,11 @@ func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
 		}
 	}
 	panic(fmt.Sprintf("Invalid test spec %q", s))
+}
+
+func logPacket(t *testing.T, tag string) func(pkt *chirp.Packet) {
+	return func(pkt *chirp.Packet) {
+		t.Helper()
+		t.Logf("%s: packet received: %v", tag, pkt)
+	}
 }
