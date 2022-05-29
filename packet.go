@@ -25,11 +25,7 @@ func (p Packet) Encode() []byte {
 
 // WriteTo writes the packet to w in binary format. It satisfies io.WriterTo.
 func (p *Packet) WriteTo(w io.Writer) (int64, error) {
-	var buf [8]byte
-	buf[0] = 'C'
-	buf[1] = 'P'
-	buf[2] = p.Protocol
-	buf[3] = byte(p.Type)
+	buf := [8]byte{'C', 'P', p.Protocol, byte(p.Type)}
 	binary.BigEndian.PutUint32(buf[4:], uint32(len(p.Payload)))
 	nw, err := w.Write(buf[:])
 	if err == nil && len(p.Payload) != 0 {
