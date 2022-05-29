@@ -142,6 +142,8 @@ func (p *Peer) Wait() error {
 }
 
 // SendPacket sends a packet to the remote peer. Any error is protocol fatal.
+// Any packet type can be sent, including reserved types. The caller is
+// responsible for ensuring such packets have a valid payload.
 func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
 	return p.sendOut(&Packet{
 		Type:    ptype,
