@@ -194,7 +194,7 @@ The sequence of operations for a call is:
 
    - If the handler completes with result `R`, the callee sends `Response(id, SUCCESS, R)`. This completes the call.
 
-     N.B.: A successful protocol call may still report an application-specific error to the caller as a variant within the successful result.
+     **Implementation note:** A successful call may still report an application-specific error to the caller as a variant within the successful result.
 
    - If the handler terminates abnormally (for example via an exception or a panic), the callee sends `Response(id, SERVICE_ERROR, E)` where `E` is either empty or `Error(C, desc, data)` for an implementation-defined choice of code `C`, human readable description message `desc`, and ancillary data `data`.  This completes the call.
 
