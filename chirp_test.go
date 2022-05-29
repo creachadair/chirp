@@ -118,8 +118,8 @@ func TestCancellation(t *testing.T) {
 	defer cancel()
 
 	rsp, err := loc.B.Call(ctx, 300, nil)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("Got %+v, %v; want %v", rsp, err, context.DeadlineExceeded)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Got %+v, %v; want %v", rsp, err, context.Canceled)
 	}
 
 	wg.Wait()

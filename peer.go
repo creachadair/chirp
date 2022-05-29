@@ -155,26 +155,35 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (*Response,
 		return nil, callError(err)
 	}
 
-	select {
-	case <-ctx.Done():
-		// The local context ended, push a cancellation to the peer.
-		return nil, callError(p.sendCancel(ctx, id))
+	done := ctx.Done()
+	for {
+		select {
+		case <-done:
+			// The local context ended, push a cancellation to the peer, then
+			// resume waiting for the response. Set done to nil so that we will
+			// not recur on this case.
+			p.sendCancel(id)
+			done = nil
+			continue
 
-	case rsp, ok := <-pc:
-		if ok {
-			if rsp.Code == CodeSuccess {
-				return rsp, nil
+		case rsp, ok := <-pc:
+			if ok {
+				if rsp.Code == CodeSuccess {
+					return rsp, nil
+				} else if rsp.Code == CodeCanceled {
+					return nil, &CallError{Err: context.Canceled, rsp: rsp}
+				}
+				ce := &CallError{rsp: rsp}
+				if err := ce.ErrorData.UnmarshalBinary(rsp.Data); err != nil {
+					ce.Message = err.Error()
+				}
+				return nil, ce
 			}
-			ce := &CallError{rsp: rsp}
-			if err := ce.ErrorData.UnmarshalBinary(rsp.Data); err != nil {
-				ce.Message = err.Error()
-			}
-			return nil, ce
+
+			// Closed without a response means there was a protocol fatal error.
+			p.tasks.Wait()
+			return nil, callError(fmt.Errorf("call terminated: %w", p.err))
 		}
-
-		// Closed without a response means there was a protocol fatal error.
-		p.tasks.Wait()
-		return nil, callError(fmt.Errorf("call terminated: %w", p.err))
 	}
 }
 
@@ -326,15 +335,13 @@ func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
 
 // sendCancel sends a cancellation for id to the remote peer then returns the
 // error from ctx.
-func (p *Peer) sendCancel(ctx context.Context, id uint32) error {
+func (p *Peer) sendCancel(id uint32) {
 	if err := p.sendOut(&Packet{
 		Type:    PacketCancel,
 		Payload: Cancel{RequestID: id}.Encode(),
 	}); err != nil {
 		p.closeOut() // protocol fatal
-		return err
 	}
-	return ctx.Err()
 }
 
 // dispatchRequest dispatches an inbound request to its handler. It reports an
