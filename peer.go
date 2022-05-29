@@ -119,7 +119,7 @@ func (p *Peer) Stop() error { p.closeOut(); return p.Wait() }
 // Wait blocks until p terminates and reports the error that cause it to stop.
 // After Wait completes it is safe to restart the peer with a new channel.
 func (p *Peer) Wait() error {
-	if p.in == nil {
+	if p.tasks == nil {
 		return nil
 	}
 	p.tasks.Wait() // service routine has exited
@@ -129,9 +129,13 @@ func (p *Peer) Wait() error {
 	}
 
 	// Clean up peer state so it can be garbage collected.
+	p.μ.Lock()
+	defer p.μ.Unlock()
 	p.in = nil
 	p.tasks = nil
+	p.out.Lock()
 	p.out.ch = nil
+	p.out.Unlock()
 	p.ocall = nil
 	p.icall = nil
 	return p.err
