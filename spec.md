@@ -70,11 +70,11 @@ The payload of a Request packet has the following structure:
 
 The payload of a Response packet has the following structure:
 
-| Offset | Bytes | Description            |
-| ------ | ----  | ---------------------- |
-| 0      | 4     | Request ID (BE uint32) |
-| 4      | 1     | Result code            |
-| 5      | rest  | Response data          |
+| Offset | Bytes | Description                  |
+|--------|-------|------------------------------|
+| 0      | 4     | Request ID (BE uint32)       |
+| 4      | 1     | [Result code](#result-codes) |
+| 5      | rest  | Response data                |
 
 - The **Request ID** identifies which request this response belongs to.
 
@@ -97,7 +97,7 @@ All result codes not defined here are reserved for future use by the protocol.
 
 A request **succeeds** if its request ID is not a duplicate, the method ID is known by the callee, and the callee's method handler completes without error. On a successful request, the response data are the uninterpreted result returned from the method handler.
 
-A **service error** occurs when a method handler fails to complete normally (for example, as a result of a panic or exception), or otherwise reports an error without producing a result. In this case, the implementation MUST set the response code to 4 (Service error) and the response data to an [Error](#error-data).
+A **service error** occurs when a method handler fails to complete normally (for example, as a result of a panic or exception), or otherwise reports an error without producing a result. In this case, the implementation MUST set the result code to 4 (Service error) and the response data to an [Error](#error-data).
 
 ### Error Data
 
