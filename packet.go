@@ -16,8 +16,8 @@ type Packet struct {
 
 // Encode encodes p in binary format.
 func (p Packet) Encode() []byte {
-	var buf bytes.Buffer
-	if _, err := p.WriteTo(&buf); err != nil {
+	buf := bytes.NewBuffer(make([]byte, 0, 8+len(p.Payload)))
+	if _, err := p.WriteTo(buf); err != nil {
 		panic(fmt.Errorf("encoding packet: %w", err))
 	}
 	return buf.Bytes()
