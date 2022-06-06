@@ -114,7 +114,7 @@ The response data in case of a service error uses the following structure:
 
 - The **Description** is a length-prefixed string giving a human-readable description of the error. This field MAY be empty but if non-empty MUST be encoded in UTF-8. The description MUST NOT exceed 65535 bytes in length; the implementation should truncate the message as necessary to fit within this constraint.
 
-- The **Auxiliary data** are an uninterpreted sequence of bytes chosen by the handler (empty OK).
+- The **Auxiliary data** are an uninterpreted sequence of bytes chosen by the handler (empty OK). This field can be used to pass application-specific structured error information back to the caller.
 
 As a special case, then implementation SHALL treat an empty byte array as a valid encoding for error data with error code 0, an empty description, and empty auxiliary data.
 
