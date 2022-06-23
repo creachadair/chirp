@@ -163,7 +163,7 @@ A peer MUST **protocol fatal** for:
 - Receiving a valid packet of known type but an invalid payload.
 - A channel failure while sending a packet.
 
-**Implementation note:** An invalid payload may be structurally valid but contain invalid data, for example a Response payload with an unknown result code.
+**Implementation note:** An invalid payload may be structurally valid but contain invalid data, for example a Response payload with an unknown result code. For an implementation-defined (custom) packet type, the validity of the payload determined by the implementation. The implementation MAY respond to an invalid custom payload with an error, but otherwise MUST treat an invalid payload as protocol fatal.
 
 #### Silent Discard Conditions
 
