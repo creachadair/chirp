@@ -184,6 +184,21 @@ func TestProtocolFatal(t *testing.T) {
 		mustErr(t, p.Wait(), "short request payload")
 	})
 
+	t.Run("BadResponse", func(t *testing.T) {
+		tw, ch := rawChannel()
+		p := chirp.NewPeer().Start(ch)
+		time.AfterFunc(time.Second, func() { p.Stop() })
+
+		tw.Write(chirp.Packet{
+			Type: chirp.PacketResponse,
+			Payload: chirp.Response{
+				RequestID: 100,
+				Code:      100,
+			}.Encode(),
+		}.Encode())
+		mustErr(t, p.Wait(), "invalid result code")
+	})
+
 	t.Run("CloseChannel", func(t *testing.T) {
 		ready := make(chan struct{})
 		done := make(chan struct{})

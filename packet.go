@@ -178,6 +178,9 @@ func (r *Response) UnmarshalBinary(data []byte) error {
 	}
 	r.RequestID = binary.BigEndian.Uint32(data[0:])
 	r.Code = ResultCode(data[4])
+	if r.Code > CodeServiceError {
+		return fmt.Errorf("invalid result code %d", r.Code)
+	}
 	if len(data[5:]) > 0 {
 		r.Data = data[5:]
 	} else {
