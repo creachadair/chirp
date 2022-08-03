@@ -451,10 +451,11 @@ func slowEcho(_ context.Context, req *chirp.Request) ([]byte, error) {
 // handler, and returns those values.
 //
 // Grammar:
-//    ok text...        -- return text, nil
-//    error ...         -- return nil, error(...)
-//    edata c msg data  -- return nil, ErrorData{c, msg, data}
-//    peer?             -- return x, nil where x == "present"/"absent"
+//
+//	ok text...        -- return text, nil
+//	error ...         -- return nil, error(...)
+//	edata c msg data  -- return nil, ErrorData{c, msg, data}
+//	peer?             -- return x, nil where x == "present"/"absent"
 //
 // Any other value causes a panic.
 func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
