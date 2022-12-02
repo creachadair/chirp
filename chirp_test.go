@@ -3,6 +3,7 @@ package chirp_test
 import (
 	"context"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"math/rand"
@@ -28,6 +29,24 @@ func TestPeer(t *testing.T) {
 	defer func() {
 		if err := loc.Stop(); err != nil {
 			t.Errorf("Stopping peers: %v", err)
+		}
+		getv := func(m *expvar.Map, name string) int64 {
+			return m.Get(name).(*expvar.Int).Value()
+		}
+
+		// Check some basic properties of peer metrics.
+		ma, mb := loc.A.Metrics(), loc.B.Metrics()
+		if got, want := getv(ma, "calls_in"), getv(mb, "calls_out"); got != want {
+			t.Errorf("B calls to A: got %d, want %d", got, want)
+		}
+		if got, want := getv(ma, "calls_out"), getv(mb, "calls_in"); got != want {
+			t.Errorf("A calls to B: got %d, want %d", got, want)
+		}
+		if got := getv(ma, "calls_pending"); got != 0 {
+			t.Errorf("A calls_pending: got %d, want 0", got)
+		}
+		if got := getv(mb, "calls_pending"); got != 0 {
+			t.Errorf("B calls_pending: got %d, want 0", got)
 		}
 	}()
 
