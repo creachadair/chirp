@@ -61,8 +61,7 @@ type Peer struct {
 		sync.Mutex
 		ch Channel
 	}
-	tasks   *taskgroup.Group
-	metrics peerMetrics
+	tasks *taskgroup.Group
 
 	μ sync.Mutex
 
@@ -87,7 +86,6 @@ func (p *Peer) Start(ch Channel) *Peer {
 		panic("peer is already started")
 	}
 
-	p.metrics.init()
 	g := taskgroup.New(nil)
 	p.in = ch
 	p.tasks = g
@@ -105,7 +103,7 @@ func (p *Peer) Start(ch Channel) *Peer {
 				p.fail(err)
 				return nil
 			}
-			p.metrics.packetRecv.Add(1)
+			peerMetrics.packetRecv.Add(1)
 			if err := p.dispatchPacket(pkt); err != nil {
 				p.fail(err)
 				return nil
@@ -118,7 +116,7 @@ func (p *Peer) Start(ch Channel) *Peer {
 
 // Metrics returns a metrics map for the peer. It is safe for the caller to add
 // additional metrics to the map while the peer is active.
-func (p *Peer) Metrics() *expvar.Map { p.metrics.init(); return p.metrics.Map }
+func (p *Peer) Metrics() *expvar.Map { return peerMetrics.emap }
 
 // Stop closes the channel and terminates the peer. It blocks until the peer
 // has exited and returns its status.
@@ -164,10 +162,10 @@ func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
 // the call will be automatically cancelled.  An error reported by Call has
 // concrete type *CallError.
 func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Response, err error) {
-	p.metrics.callOut.Add(1)
+	peerMetrics.callOut.Add(1)
 	defer func() {
 		if err != nil {
-			p.metrics.callOutErr.Add(1)
+			peerMetrics.callOutErr.Add(1)
 		}
 	}()
 
@@ -175,8 +173,8 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 	if err != nil {
 		return nil, callError(err)
 	}
-	p.metrics.callPending.Add(1)
-	defer p.metrics.callPending.Add(-1)
+	peerMetrics.callPending.Add(1)
+	defer peerMetrics.callPending.Add(-1)
 
 	done := ctx.Done()
 	for {
@@ -292,14 +290,14 @@ func (p *Peer) fail(err error) {
 		close(pc)
 	}
 	p.ocall = nil
-	p.metrics.callPending.Set(0)
+	peerMetrics.callPending.Set(0)
 
 	// Terminate all incomplete active (inbound) calls.
 	for _, stop := range p.icall {
 		stop()
 	}
 	p.icall = nil
-	p.metrics.callActive.Set(0)
+	peerMetrics.callActive.Set(0)
 
 	p.err = err
 }
@@ -374,10 +372,10 @@ func (p *Peer) sendCancel(id uint32) {
 // error back to the caller for duplicate request ID or unknown method.
 // The caller must hold p.μ.
 func (p *Peer) dispatchRequest(req *Request) (err error) {
-	p.metrics.callIn.Add(1)
+	peerMetrics.callIn.Add(1)
 	defer func() {
 		if err != nil {
-			p.metrics.callInErr.Add(1)
+			peerMetrics.callInErr.Add(1)
 		}
 	}()
 
@@ -408,11 +406,11 @@ func (p *Peer) dispatchRequest(req *Request) (err error) {
 	pctx := context.WithValue(p.base(), peerContextKey{}, p)
 	ctx, cancel := context.WithCancel(pctx)
 	p.icall[req.RequestID] = cancel
-	p.metrics.callActive.Add(1)
+	peerMetrics.callActive.Add(1)
 
 	p.tasks.Go(func() error {
 		defer cancel()
-		defer p.metrics.callActive.Add(-1)
+		defer peerMetrics.callActive.Add(-1)
 
 		data, err := func() (_ []byte, err error) {
 			// Ensure a panic out of the handler is turned into a graceful response.
@@ -501,7 +499,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		handler, ok := p.pmux[pkt.Type]
 		p.μ.Unlock()
 		if !ok {
-			p.metrics.packetDropped.Add(1)
+			peerMetrics.packetDropped.Add(1)
 			break // ignore the packet
 		}
 
@@ -531,7 +529,7 @@ func (p *Peer) releaseID(id uint32) {
 func (p *Peer) sendOut(pkt *Packet) error {
 	p.out.Lock()
 	defer p.out.Unlock()
-	p.metrics.packetSent.Add(1)
+	peerMetrics.packetSent.Add(1)
 	return p.out.ch.Send(pkt)
 }
 
@@ -586,35 +584,4 @@ func ContextPeer(ctx context.Context) *Peer {
 		return v.(*Peer)
 	}
 	return nil
-}
-
-// peerMetrics record per-peer activity counters.
-type peerMetrics struct {
-	packetRecv    expvar.Int
-	packetSent    expvar.Int
-	packetDropped expvar.Int
-	callIn        expvar.Int // number of inbound calls received
-	callInErr     expvar.Int // number of inbound calls reporting an error
-	callOut       expvar.Int // number of outbound calls initiated
-	callOutErr    expvar.Int // number of outbound calls reporting an error
-	callActive    expvar.Int // inbound
-	callPending   expvar.Int // outbound
-
-	*expvar.Map
-}
-
-func (p *peerMetrics) init() {
-	if p.Map == nil {
-		m := new(expvar.Map)
-		m.Set("packets_received", &p.packetRecv)
-		m.Set("packets_sent", &p.packetSent)
-		m.Set("packets_dropped", &p.packetDropped)
-		m.Set("calls_in", &p.callIn)
-		m.Set("calls_in_failed", &p.callInErr)
-		m.Set("calls_active", &p.callActive)
-		m.Set("calls_out", &p.callOut)
-		m.Set("calls_out_failed", &p.callOutErr)
-		m.Set("calls_pending", &p.callPending)
-		p.Map = m
-	}
 }
