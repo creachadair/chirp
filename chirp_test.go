@@ -260,7 +260,10 @@ func TestProtocolFatal(t *testing.T) {
 }
 
 func TestCustomPacket(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	loc := peers.NewLocal()
+	defer loc.Stop()
 
 	var log []*chirp.Packet
 	var got []*chirp.Packet
@@ -300,6 +303,8 @@ func TestCustomPacket(t *testing.T) {
 }
 
 func TestContextPlumbing(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
@@ -325,6 +330,8 @@ func TestContextPlumbing(t *testing.T) {
 }
 
 func TestCallback(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
@@ -364,6 +371,8 @@ func TestCallback(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
+	defer leaktest.Check(t)()
+
 	t.Run("Local", func(t *testing.T) {
 		defer leaktest.Check(t)()
 
