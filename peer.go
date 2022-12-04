@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/creachadair/taskgroup"
@@ -584,4 +585,41 @@ func ContextPeer(ctx context.Context) *Peer {
 		return v.(*Peer)
 	}
 	return nil
+}
+
+// SplitAddress parses an address string to guess a network type and target.
+//
+// The assignment of a network type uses the following heuristics:
+//
+// If s does not have the form [host]:port, the network is assigned as "unix".
+// The network "unix" is also assigned if port == "", port contains characters
+// other than ASCII letters, digits, and "-", or if host contains a "/".
+//
+// Otherwise, the network is assigned as "tcp". Note that this function does
+// not verify whether the address is lexically valid.
+func SplitAddress(s string) (network, address string) {
+	i := strings.LastIndex(s, ":")
+	if i < 0 {
+		return "unix", s
+	}
+	host, port := s[:i], s[i+1:]
+	if port == "" || !isServiceName(port) {
+		return "unix", s
+	} else if strings.IndexByte(host, '/') >= 0 {
+		return "unix", s
+	}
+	return "tcp", s
+}
+
+// isServiceName reports whether s looks like a legal service name from the
+// services(5) file. The grammar of such names is not well-defined, but for our
+// purposes it includes letters, digits, and "-".
+func isServiceName(s string) bool {
+	for _, b := range s {
+		if b >= '0' && b <= '9' || b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z' || b == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }

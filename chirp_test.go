@@ -523,3 +523,34 @@ func logPacket(t *testing.T, tag string) func(pkt *chirp.Packet) {
 		t.Logf("%s: packet received: %v", tag, pkt)
 	}
 }
+
+func TestSplitAddress(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"", "unix"},
+		{":", "unix"},
+
+		{"nothing", "unix"},        // no colon
+		{"like/a/file", "unix"},    // no colon
+		{"no-port:", "unix"},       // empty port
+		{"file/with:port", "unix"}, // slashes in host
+		{"path/with:404", "unix"},  // slashes in host
+		{"mangled:@3", "unix"},     // non-alphanumerics in port
+		{"[::1]:2323", "tcp"},      // bracketed IPv6 with port
+
+		{":80", "tcp"},            // numeric port
+		{":dumb-crud", "tcp"},     // service name
+		{"localhost:80", "tcp"},   // host and numeric port
+		{"localhost:http", "tcp"}, // host and service name
+	}
+	for _, test := range tests {
+		got, addr := chirp.SplitAddress(test.input)
+		if got != test.want {
+			t.Errorf("SplitAddress(%q) type: got %q, want %q", test.input, got, test.want)
+		}
+		if addr != test.input {
+			t.Errorf("SplitAddress(%q) addr: got %q, want %q", test.input, addr, test.input)
+		}
+	}
+}
