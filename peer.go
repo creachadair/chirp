@@ -291,14 +291,12 @@ func (p *Peer) fail(err error) {
 		close(pc)
 	}
 	p.ocall = nil
-	peerMetrics.callPending.Set(0)
 
 	// Terminate all incomplete active (inbound) calls.
 	for _, stop := range p.icall {
 		stop()
 	}
 	p.icall = nil
-	peerMetrics.callActive.Set(0)
 
 	p.err = err
 }
