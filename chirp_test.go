@@ -267,13 +267,24 @@ func TestCustomPacket(t *testing.T) {
 
 	var log []*chirp.Packet
 	var got []*chirp.Packet
+	var wg sync.WaitGroup
+	wg.Add(2)
 	loc.A.
-		HandlePacket(128, func(_ context.Context, pkt *chirp.Packet) error {
+		HandlePacket(128, func(ctx context.Context, pkt *chirp.Packet) error {
+			defer wg.Done()
 			got = append(got, pkt)
-			return nil
+
+			// Send a "reply" packet back to the caller. This does not need to be
+			// the same packet type that we received.
+			rsp := string(pkt.Payload) + " reply"
+			return chirp.ContextPeer(ctx).SendPacket(129, []byte(rsp))
 		}).
-		LogPacket(func(pkt *chirp.Packet) {
+		LogPacket(func(pkt *chirp.Packet) { log = append(log, pkt) })
+	loc.B.
+		HandlePacket(129, func(ctx context.Context, pkt *chirp.Packet) error {
+			defer wg.Done()
 			log = append(log, pkt)
+			return nil
 		})
 
 	// Unknown packet type: Logged but discarded.
@@ -281,6 +292,9 @@ func TestCustomPacket(t *testing.T) {
 
 	// Registered custom packet type: Logged and "processed".
 	p2 := &chirp.Packet{Type: 128, Payload: []byte("custom")}
+
+	// A packet handler can also send packets back to its caller.
+	p3 := &chirp.Packet{Type: 129, Payload: []byte("custom reply")}
 
 	if err := loc.B.SendPacket(p1.Type, p1.Payload); err != nil {
 		t.Fatalf("SendPacket: %v", err)
@@ -290,11 +304,12 @@ func TestCustomPacket(t *testing.T) {
 	}
 
 	// Stop the peer so the callbacks settle.
+	wg.Wait()
 	if err := loc.Stop(); err != nil {
 		t.Errorf("Stop peer: %v", err)
 	}
 
-	if diff := cmp.Diff([]*chirp.Packet{p1, p2}, log); diff != "" {
+	if diff := cmp.Diff([]*chirp.Packet{p1, p2, p3}, log); diff != "" {
 		t.Errorf("Packet log (-want, +got):\n%s", diff)
 	}
 	if diff := cmp.Diff([]*chirp.Packet{p2}, got); diff != "" {
