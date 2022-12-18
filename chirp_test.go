@@ -156,6 +156,39 @@ func TestCancellation(t *testing.T) {
 	}
 }
 
+func TestSlowCancellation(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	stop := make(chan struct{})
+	loc.A.Handle(666, func(context.Context, *chirp.Request) ([]byte, error) {
+		<-stop // block until released
+		return []byte("message in a bottle"), nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(stop)
+		select {
+		case <-done:
+			// OK, we got past the call
+		case <-time.After(5 * time.Second):
+			t.Error("Timeout waiting for Call to return")
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if rsp, err := loc.B.Call(ctx, 666, nil); err == nil {
+		t.Errorf("Call: unexpectedly succeeded: %v", rsp)
+	} else {
+		t.Logf("Call correctly failed: %v", err)
+	}
+	close(done)
+}
+
 func TestProtocolFatal(t *testing.T) {
 	defer leaktest.Check(t)()
 
