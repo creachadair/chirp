@@ -166,7 +166,7 @@ func TestSlowCancellation(t *testing.T) {
 	loc.A.Handle(666, func(context.Context, *chirp.Request) ([]byte, error) {
 		<-stop // block until released
 		return []byte("message in a bottle"), nil
-	})
+	}).LogPacket(logPacket(t, "Peer A"))
 
 	done := make(chan struct{})
 	go func() {
