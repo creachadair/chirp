@@ -222,7 +222,7 @@ Once a call is either terminated or complete, the `id` value for that call is el
 
 While a call `id` is *pending*, the caller may request its cancellation. To do so, the caller sends a `Cancel(id)` packet to the callee:
 
-- If `id` is unknown or has already completed, the callee MUST silently discard the packet.
+- If `id` is unknown or has already completed, the callee MUST silently discard the `Cancel(id)` packet.
 
 - Otherwise: If the call has not yet been dispatched to a handler, the callee MUST discard it and send `Response(id, CANCELED, nil)`. This terminates the call for request `id`.
 
@@ -232,16 +232,18 @@ While a call `id` is *pending*, the caller may request its cancellation. To do s
 
   - If interruption is not possible, the callee MAY send `Response(id, CANCELED, nil)` immediately and discard the handler result when it completes. This terminates the call for request `id`.
 
-  - Otherwise, the callee MUST ignore the cancellation request and allow the handler to complete normally.
+  - Otherwise, once the handler completes, the callee MUST send an ordinary response for the request according to the rules above.
 
-- Otherwise: If the call handler has already completed, the handler SHOULD report its result as a normal response, completing the call. Alternatively, the callee MAY discard the result and send `Response(id, CANCELED, nil)` instead. This terminates the call.
+- Otherwise (if the call handler has already completed), the callee SHOULD report its result as a normal response, completing the call. Alternatively, the callee MAY discard the result and send `Response(id, CANCELED, nil)` instead. Either of these actions terminates the call.
 
 If cancellation succeeds, the cancellation response supersedes a handler response. Whether or not cancellation succeeds, the callee MUST NOT send multiple responses for the same request.
+
+After sending a `Cancel(id)` packet to the callee, the caller peer MAY return control to the host without waiting for the cancellation to complete. If the caller does this, any subsequent response from the callee for the call must be silently discarded in accordance with the rules above.
 
 **Implementation note:** The `Cancel(id)` packet is not itself a request and does not require its own reply.
 
 ### Custom Subprotocols
 
-Packet type values from 128-255 are reserved for use by the implementation. A peer implementation is permitted to send and accept packets with types in this custom range to define other subprotocols. Apart from the basic packet structure, the semantics of custom packet types are entirely up to the implementation.
+Packet type values from 128-255 are reserved for use by the implementation. An implementation is permitted to send and accept packets with types in this custom range to define other subprotocols. Apart from the basic packet structure, the semantics of custom packet types are entirely up to the implementation.
 
 Because a peer that does not recognize the type of a structurally valid packet is required to ignore the packet, peers may need to advertise or negotiate capabilities for custom subprotocols.  The default [call subprotocol](#call) should be used for this purpose.
