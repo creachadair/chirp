@@ -148,9 +148,9 @@ While a session is active, each peer processes the packets sent by the other pee
 
 ### Error Handling
 
-Basic errors in the protocol implementation are **protocol fatal**. For a protocol fatal error, the peer MUST immediately terminate the channel and report or log an error to the host. Protocol fatal errors are the result of channel failures, resource exhaustion, or an incorrect peer implementation rather than host code.
+Basic errors in the protocol implementation are **protocol fatal**. For a protocol fatal error, the peer MUST immediately terminate the channel and report or log an error to the host. Channel failures, resource exhaustion, and incorrect peer implementation lead to protocol fatal errors. Errors reported by method handlers are not protocol fatal.
 
-To **silently discard** a packet means that the receiving peer MUST fully consume the packet and MUST NOT send a response to the sending peer. The channel is not closed. The receiving peer is free to log or otherwise report the packet to the host.
+To **silently discard** a packet means that the receiving peer MUST fully consume the packet and MUST NOT send a response to the sending peer. Neither peer closes the channel. The receiving peer is free to log or the packet or report an error to the host.
 
 To **respond with error** means that the receiving peer MUST fully consume the packet and send a response to the sending peer indicating the error condition. The channel is not closed.
 
@@ -163,7 +163,7 @@ A peer MUST **protocol fatal** for:
 - Receiving a valid packet of known type but an invalid payload.
 - A channel failure while sending a packet.
 
-**Implementation note:** A payload may be invalid if it is structurally valid but contains invalid data, for example a Response payload with an unknown result code. For an implementation-defined (custom) packet type, the validity of the payload determined by the implementation. The implementation MAY respond to an invalid custom payload with an error, but otherwise MUST treat an invalid payload as protocol fatal.
+**Implementation note:** A payload may be invalid if it is structurally valid but contains invalid data, for example a Response payload with an unknown result code. For implementation-defined (custom) packet types, the validity of the payload is determined by the implementation. The implementation MAY respond to an invalid custom payload with an error, but otherwise MUST treat an invalid payload as protocol fatal.
 
 #### Silent Discard Conditions
 
