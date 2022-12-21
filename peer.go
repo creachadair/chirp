@@ -226,6 +226,9 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 // Handle registers a handler for the specified method ID. It is safe to call
 // this while the peer is running. Passing a nil Handler removes any handler
 // for the specified ID. Handle returns p to permit chaining.
+//
+// As a special case, if methodID == 0 the handler is called for any request
+// with a method ID that does not have a more specific handler registered.
 func (p *Peer) Handle(methodID uint32, handler Handler) *Peer {
 	p.μ.Lock()
 	defer p.μ.Unlock()
@@ -405,13 +408,19 @@ func (p *Peer) dispatchRequest(req *Request) (err error) {
 
 	handler, ok := p.imux[req.MethodID]
 	if !ok {
-		return p.sendOut(&Packet{
-			Type: PacketResponse,
-			Payload: Response{
-				RequestID: req.RequestID,
-				Code:      CodeUnknownMethod,
-			}.Encode(),
-		})
+		const wildcardID = 0
+		// Check whether a wildcard handler is registered.
+		if wc, ok := p.imux[wildcardID]; ok {
+			handler = wc
+		} else {
+			return p.sendOut(&Packet{
+				Type: PacketResponse,
+				Payload: Response{
+					RequestID: req.RequestID,
+					Code:      CodeUnknownMethod,
+				}.Encode(),
+			})
+		}
 	}
 
 	// Start a goroutine to service the request. The goroutine handles

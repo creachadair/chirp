@@ -98,6 +98,52 @@ func TestPeer(t *testing.T) {
 	}
 }
 
+func TestWildcard(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	ctx := context.Background()
+	call := func(mid uint32, want string, fail bool) {
+		t.Helper()
+
+		rsp, err := loc.B.Call(ctx, mid, nil)
+		if err != nil {
+			if fail {
+				t.Logf("Call %d: got err=%v [OK]", mid, err)
+			} else {
+				t.Errorf("Call %d: unexpected error: %v", mid, err)
+			}
+			return
+		} else if fail {
+			t.Errorf("Call %d: should have failed", mid)
+		}
+		if got := string(rsp.Data); got != want {
+			t.Errorf("Call %d: got %q, want %q", mid, got, want)
+		}
+	}
+
+	loc.A.
+		Handle(0, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			return []byte("wildcard"), nil
+		}).
+		Handle(1, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			return []byte("designated"), nil
+		})
+
+	call(0, "wildcard", false)
+	call(1, "designated", false)
+	call(2, "wildcard", false)
+
+	// Unregister the wildcard handler and try again.
+	loc.A.Handle(0, nil)
+
+	call(0, "", true)
+	call(1, "designated", false)
+	call(2, "?", true)
+}
+
 func TestCancellation(t *testing.T) {
 	defer leaktest.Check(t)()
 
