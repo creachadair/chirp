@@ -281,16 +281,39 @@ func (e ErrorData) Error() string {
 
 // Encode encodes the error data in binary format.
 func (e ErrorData) Encode() []byte {
-	mlen := len(e.Message)
-	if mlen > 65535 {
-		mlen = 65535 // clip message to fit
-	}
+	msg := truncate(e.Message, 65535)
+	mlen := len(msg)
+
 	buf := make([]byte, 4+mlen+len(e.Data)) // 2 code, 2 length
 	binary.BigEndian.PutUint16(buf[0:], e.Code)
 	binary.BigEndian.PutUint16(buf[2:], uint16(mlen))
-	copy(buf[4:], e.Message[:mlen])
+	copy(buf[4:], msg)
 	copy(buf[4+mlen:], e.Data)
 	return buf
+}
+
+// truncate returns a prefix of a UTF-8 string s, having length no greater than
+// n bytes.  If s exceeds this length, it is truncated at a point ≤ n so that
+// the result does not end in a partial UTF-8 encoding.
+func truncate(s string, n int) string {
+	if n >= len(s) {
+		return s
+	}
+
+	// Back up until we find the beginning of a UTF-8 encoding.
+	for n > 0 && s[n-1]&0xc0 == 0x80 { // 0x10... is a continuation byte
+		n--
+	}
+
+	// If we're at the beginning of a multi-byte encoding, back up one more to
+	// skip it. It's possible the value was already complete, but it's simpler
+	// if we only have to check in one direction.
+	//
+	// Otherwise, we have a single-byte code (0x00... or 0x01...).
+	if n > 0 && s[n-1]&0xc0 == 0xc0 { // 0x11... starts a multibyte encoding
+		n--
+	}
+	return s[:n]
 }
 
 // UnmarshalBinary decodes data into a Chirp v0 error data payload.
