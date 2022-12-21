@@ -133,6 +133,13 @@ The payload of a Cancel packet has the following structure:
 
 The current protocol is Version 0, indicated by the packet header `CP\x00`.
 
+An implementation of the protocol consists of two components:
+
+- The **peer**, which manages the sending, receipt, encoding, and decoding of packets and protocol messages, and
+- The **host**, which implements method handlers, custom packet handlers, and all other application-specific logic.
+
+The specification defines the requirements of the peer.
+
 ### Session Processing
 
 A Chirp protocol session begins by establishing a reliable, bidirectional, ordered channel carrying packets between a pair of peers.
@@ -148,7 +155,7 @@ While a session is active, each peer processes the packets sent by the other pee
 
 ### Error Handling
 
-Basic errors in the protocol implementation are **protocol fatal**. For a protocol fatal error, the peer MUST immediately terminate the channel and report or log an error to the host. Channel failures, resource exhaustion, and incorrect peer implementation lead to protocol fatal errors. Errors reported by method handlers are not protocol fatal.
+A **protocol fatal** condition represents an unrecoverable failure of the protocol.  For a protocol fatal error, the peer MUST immediately terminate the channel and report or log an error to the host.
 
 To **silently discard** a packet means that the receiving peer MUST fully consume the packet and MUST NOT send a response to the sending peer. Neither peer closes the channel. The receiving peer is free to log or the packet or report an error to the host.
 
@@ -156,14 +163,18 @@ To **respond with error** means that the receiving peer MUST fully consume the p
 
 #### Protocol Fatal Conditions
 
-A peer MUST **protocol fatal** for:
+Channel failures, resource exhaustion, and fundamental errors in the protocol implementation are protocol fatal. A peer MUST **protocol fatal** for:
 
+- A channel failure while sending or receiving a packet.
 - Receiving a short or invalid packet header.
 - Receiving a valid packet header with a short payload.
 - Receiving a valid packet of known type but an invalid payload.
-- A channel failure while sending a packet.
 
-**Implementation note:** A payload may be invalid if it is structurally valid but contains invalid data, for example a Response payload with an unknown result code. For implementation-defined (custom) packet types, the validity of the payload is determined by the implementation. The implementation MAY respond to an invalid custom payload with an error, but otherwise MUST treat an invalid payload as protocol fatal.
+**Implementation note:** Ordinary errors reported by host method handlers SHOULD NOT be protocol fatal.
+
+**Implementation note:** A payload may be invalid even if it is structurally valid, if it contains invalid data. For example, a Response payload with a non-empty but malformed error data message is invalid. For the reserved packet types defined in this specification, the implementation MUST treat invalid payloads as protocol fatal unless otherwise noted.
+
+For custom (implementation-defined) packet types, the validity of the payload is determined by the implementation. The implementation MAY respond to an invalid custom payload with an error, but otherwise MUST treat an invalid payload as protocol fatal.
 
 #### Silent Discard Conditions
 
@@ -177,8 +188,8 @@ A peer MUST **silently discard**:
 
 A peer MUST **respond with error** for:
 
-- A Request packet with an unknown method ID (code 1).
-- A Request packet with a duplicated pending request ID (code 2).
+- A Request packet with an unknown method ID (using result code 1).
+- A Request packet with a duplicated pending request ID (using result code 2).
 
 
 ### Call Subprotocol
@@ -192,6 +203,7 @@ The sequence of operations for a call is:
    - If `id` duplicates an already pending request, the callee MUST send a `Response(id, DUPLICATE_REQUEST, nil)` packet. This terminates the call. The callee MUST NOT interrupt or terminate the already-pending request as a result of the duplication.
 
    - If `method` is unknown, the callee MUST send a `Response(id, UNKNOWN_METHOD, nil)` packet. This terminates the call.
+
 2. The callee runs the handler for the requested method.
 
    - If the handler completes with result `R`, the callee sends `Response(id, SUCCESS, R)`. This completes the call.
