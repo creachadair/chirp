@@ -246,4 +246,4 @@ After sending a `Cancel(id)` packet to the callee, the caller peer MAY return co
 
 Packet type values from 128-255 are reserved for use by the implementation. An implementation is permitted to send and accept packets with types in this custom range to define other subprotocols. Apart from the basic packet structure, the semantics of custom packet types are entirely up to the implementation.
 
-Because a peer that does not recognize the type of a structurally valid packet is required to ignore the packet, peers may need to advertise or negotiate capabilities for custom subprotocols.  The default [call subprotocol](#call) should be used for this purpose.
+Because a peer that does not recognize the type of a structurally valid packet is required to ignore the packet, peers may need to advertise or negotiate capabilities for custom subprotocols.  The default [call subprotocol](#call-subprotocol) should be used for this purpose.
