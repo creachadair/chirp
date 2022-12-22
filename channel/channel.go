@@ -56,7 +56,7 @@ func safeClose(err *error) {
 
 // IO constructs a channel that receives from r and sends to wc.
 func IO(r io.Reader, wc io.WriteCloser) IOChannel {
-	// N.B. The bufio package will reuse exitsing buffers if possible.
+	// N.B. The bufio package will reuse existing buffers if possible.
 	return IOChannel{r: bufio.NewReader(r), w: bufio.NewWriter(wc), c: wc}
 }
 
