@@ -40,8 +40,26 @@ type Handler = func(context.Context, *Request) ([]byte, error)
 // Any error reported by a packet handler is protocol fatal.
 type PacketHandler = func(context.Context, *Packet) error
 
-// A PacketLogger logs a packet received the remote peer.
-type PacketLogger = func(pkt *Packet)
+// A PacketLogger logs a packet exchanged with the remote peer.
+type PacketLogger = func(pkt PacketInfo)
+
+// A PacketInfo combines a packet and a flag indicating whether the packet was
+// sent or received.
+type PacketInfo struct {
+	*Packet      // the packet being logged
+	Sent    bool // whether the packet was sent (true) or received (false)
+}
+
+func (p PacketInfo) dir() string {
+	if p.Sent {
+		return "send"
+	}
+	return "recv"
+}
+
+func (p PacketInfo) String() string {
+	return fmt.Sprintf("%v %v", p.dir(), p.Packet)
+}
 
 // A Peer implements a Chirp v0 peer. A zero-valued Peer is ready for use, but
 // must not be copied after any method has been called.
@@ -271,12 +289,13 @@ func (p *Peer) HandlePacket(ptype PacketType, handler PacketHandler) *Peer {
 	return p
 }
 
-// LogPacket registers a callback that will be invoked for all packets received
-// from the remote peer, regardless of type, including packets to be discarded.
+// LogPackets registers a callback that will be invoked for each packet
+// exchanged with the remote peer, regardless of type, including packets to be
+// discarded.
 //
-// Passing a nil callback disables logging. The packet logger is invoked
-// synchronously with the processing of packets, prior to handling.
-func (p *Peer) LogPacket(log PacketLogger) *Peer {
+// Passing a nil callback disables packet logging. The packet logger is invoked
+// synchronously with dispatch, prior to sending or calling a packet handler.
+func (p *Peer) LogPackets(log PacketLogger) *Peer {
 	p.μ.Lock()
 	defer p.μ.Unlock()
 	p.plog = log
@@ -472,7 +491,7 @@ func (p *Peer) dispatchRequest(req *Request) (err error) {
 // The caller must hold p.μ.
 func (p *Peer) dispatchPacket(pkt *Packet) error {
 	if p.plog != nil {
-		p.plog(pkt)
+		p.plog(PacketInfo{Packet: pkt, Sent: false})
 	}
 	switch pkt.Type {
 	case PacketRequest:
@@ -552,6 +571,9 @@ func (p *Peer) sendOut(pkt *Packet) error {
 	p.out.Lock()
 	defer p.out.Unlock()
 	peerMetrics.packetSent.Add(1)
+	if p.plog != nil {
+		p.plog(PacketInfo{Packet: pkt, Sent: true})
+	}
 	return p.out.ch.Send(pkt)
 }
 

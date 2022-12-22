@@ -159,18 +159,22 @@ func TestCancellation(t *testing.T) {
 	wg.Add(3) // there are three packets exchanged below
 
 	var apkt []packet
-	loc.A.LogPacket(func(pkt *chirp.Packet) {
-		apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
-		wg.Done()
+	loc.A.LogPackets(func(pkt chirp.PacketInfo) {
+		if !pkt.Sent {
+			apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
+			wg.Done()
+		}
 	}).Handle(300, func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
 
 	var bpkt []packet
-	loc.B.LogPacket(func(pkt *chirp.Packet) {
-		bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
-		wg.Done()
+	loc.B.LogPackets(func(pkt chirp.PacketInfo) {
+		if !pkt.Sent {
+			bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
+			wg.Done()
+		}
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -212,7 +216,7 @@ func TestSlowCancellation(t *testing.T) {
 	loc.A.Handle(666, func(context.Context, *chirp.Request) ([]byte, error) {
 		<-stop // block until released
 		return []byte("message in a bottle"), nil
-	}).LogPacket(logPacket(t, "Peer A"))
+	}).LogPackets(logPacket(t, "Peer A"))
 
 	done := make(chan struct{})
 	go func() {
@@ -358,7 +362,11 @@ func TestCustomPacket(t *testing.T) {
 			rsp := string(pkt.Payload) + " reply"
 			return chirp.ContextPeer(ctx).SendPacket(129, []byte(rsp))
 		}).
-		LogPacket(func(pkt *chirp.Packet) { log = append(log, pkt) })
+		LogPackets(func(pkt chirp.PacketInfo) {
+			if !pkt.Sent {
+				log = append(log, pkt.Packet)
+			}
+		})
 	loc.B.
 		HandlePacket(129, func(ctx context.Context, pkt *chirp.Packet) error {
 			defer wg.Done()
@@ -453,8 +461,8 @@ func TestCallback(t *testing.T) {
 	// Each peer will ping-pong callbacks until the threshold has been reached,
 	// then unwind returning the result from the furthest call all the way back
 	// to the initial caller.
-	loc.A.Handle(100, caller).LogPacket(logPacket(t, "Peer A"))
-	loc.B.Handle(100, caller).LogPacket(logPacket(t, "Peer B"))
+	loc.A.Handle(100, caller).LogPackets(logPacket(t, "Peer A"))
+	loc.B.Handle(100, caller).LogPackets(logPacket(t, "Peer B"))
 
 	rsp, err := loc.A.Call(context.Background(), 100, []byte("0"))
 	if err != nil {
@@ -611,10 +619,10 @@ func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
 	panic(fmt.Sprintf("Invalid test spec %q", s))
 }
 
-func logPacket(t *testing.T, tag string) func(pkt *chirp.Packet) {
-	return func(pkt *chirp.Packet) {
+func logPacket(t *testing.T, tag string) chirp.PacketLogger {
+	return func(pkt chirp.PacketInfo) {
 		t.Helper()
-		t.Logf("%s: packet received: %v", tag, pkt)
+		t.Logf("%s: %v", tag, pkt)
 	}
 }
 
