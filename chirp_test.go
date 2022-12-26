@@ -677,3 +677,14 @@ func TestSplitAddress(t *testing.T) {
 		}
 	}
 }
+
+func TestRegression(t *testing.T) {
+	t.Run("ErrorDataSize", func(t *testing.T) {
+		const input = "\x00\x01\x00\x04abc"
+
+		var ed chirp.ErrorData
+		if err := ed.UnmarshalBinary([]byte(input)); err == nil {
+			t.Errorf("ErrorData: got %#v, wanted error", ed)
+		}
+	})
+}
