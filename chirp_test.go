@@ -212,9 +212,11 @@ func TestSlowCancellation(t *testing.T) {
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
-	stop := make(chan struct{})
+	stop := make(chan struct{})     // close to release the blocked 666 handler
+	returned := make(chan struct{}) // closed when the 666 handler returns
 	loc.A.
 		Handle(666, func(context.Context, *chirp.Request) ([]byte, error) {
+			defer close(returned)
 			<-stop // block until released
 			return []byte("message in a bottle"), nil
 		}).
@@ -223,7 +225,7 @@ func TestSlowCancellation(t *testing.T) {
 		}).
 		LogPackets(logPacket(t, "Peer A"))
 
-	done := make(chan struct{})
+	done := make(chan struct{}) // closed when Call(666) returns
 	go func() {
 		defer close(stop)
 		select {
@@ -246,12 +248,16 @@ func TestSlowCancellation(t *testing.T) {
 
 	// Verify that the peer did not yield the unresolved request ID, which would
 	// otherwise be reused.
-	if rsp, err := loc.B.Call(ctx, 100, nil); err != nil {
+	if rsp, err := loc.B.Call(context.Background(), 100, nil); err != nil {
 		t.Errorf("Call 100 unexpectedly failed: %v", err)
 	} else if got, want := string(rsp.Data), "ok"; got != want {
 		t.Errorf("Call 100: got %q, want %q", got, want)
 	}
-	close(done)
+
+	close(done) // also releases the blocked 666 handler
+	<-returned
+
+	// TODO(creachadair): Verify that A sent a CANCELED packet for ID 1.
 }
 
 func TestProtocolFatal(t *testing.T) {

@@ -469,12 +469,17 @@ func (p *Peer) dispatchRequest(req *Request) (err error) {
 		}()
 
 		rsp := &Response{RequestID: req.RequestID}
-		if err == nil {
+		if ctx.Err() != nil || err == context.Canceled || err == context.DeadlineExceeded {
+			// N.B. Only do this for the unwrapped sentinel errors.
+
+			// If the context terminated, treat this as a cancellation even if the
+			// handler succeeded. This usually means the context timed out or the
+			// remote peer sent a cancellation that the handler ignored.
+
+			rsp.Code = CodeCanceled
+		} else if err == nil {
 			rsp.Code = CodeSuccess
 			rsp.Data = data
-		} else if err == context.Canceled || err == context.DeadlineExceeded {
-			// N.B. Only do this for the unwrapped sentinel errors.
-			rsp.Code = CodeCanceled
 		} else if ed, ok := err.(*ErrorData); ok {
 			rsp.Code = CodeServiceError
 			rsp.Data = ed.Encode()
