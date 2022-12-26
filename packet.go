@@ -333,9 +333,8 @@ func (e *ErrorData) UnmarshalBinary(data []byte) error {
 	}
 	e.Code = binary.BigEndian.Uint16(data[0:])
 	e.Message = string(data[4 : 4+mlen])
-	if d := data[4+mlen:]; len(data) != 0 {
-		e.Data = d
-	} else {
+	e.Data = data[4+mlen:]
+	if len(e.Data) == 0 {
 		e.Data = nil
 	}
 	return nil

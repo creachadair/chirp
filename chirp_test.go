@@ -685,6 +685,8 @@ func TestRegression(t *testing.T) {
 		var ed chirp.ErrorData
 		if err := ed.UnmarshalBinary([]byte(input)); err == nil {
 			t.Errorf("ErrorData: got %#v, wanted error", ed)
+		} else {
+			t.Logf("Decoding ErorData: got expected error: %v", err)
 		}
 	})
 }
