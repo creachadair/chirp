@@ -329,7 +329,7 @@ func (e *ErrorData) UnmarshalBinary(data []byte) error {
 
 	mlen := int(binary.BigEndian.Uint16(data[2:]))
 	if 4+mlen > len(data) {
-		return fmt.Errorf("error message truncated (%d > %d bytes)", 2+mlen, len(data))
+		return fmt.Errorf("error message truncated (%d > %d bytes)", 4+mlen, len(data))
 	}
 	e.Code = binary.BigEndian.Uint16(data[0:])
 	e.Message = string(data[4 : 4+mlen])
