@@ -213,10 +213,15 @@ func TestSlowCancellation(t *testing.T) {
 	defer loc.Stop()
 
 	stop := make(chan struct{})
-	loc.A.Handle(666, func(context.Context, *chirp.Request) ([]byte, error) {
-		<-stop // block until released
-		return []byte("message in a bottle"), nil
-	}).LogPackets(logPacket(t, "Peer A"))
+	loc.A.
+		Handle(666, func(context.Context, *chirp.Request) ([]byte, error) {
+			<-stop // block until released
+			return []byte("message in a bottle"), nil
+		}).
+		Handle(100, func(context.Context, *chirp.Request) ([]byte, error) {
+			return []byte("ok"), nil
+		}).
+		LogPackets(logPacket(t, "Peer A"))
 
 	done := make(chan struct{})
 	go func() {
@@ -229,12 +234,22 @@ func TestSlowCancellation(t *testing.T) {
 		}
 	}()
 
+	// Verify that a call times out and returns control to the calling peer even
+	// if the remote peer has not acknowledged the cancellation yet.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	if rsp, err := loc.B.Call(ctx, 666, nil); err == nil {
 		t.Errorf("Call: unexpectedly succeeded: %v", rsp)
 	} else {
 		t.Logf("Call correctly failed: %v", err)
+	}
+
+	// Verify that the peer did not yield the unresolved request ID, which would
+	// otherwise be reused.
+	if rsp, err := loc.B.Call(ctx, 100, nil); err != nil {
+		t.Errorf("Call 100 unexpectedly failed: %v", err)
+	} else if got, want := string(rsp.Data), "ok"; got != want {
+		t.Errorf("Call 100: got %q, want %q", got, want)
 	}
 	close(done)
 }

@@ -212,9 +212,12 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 				p.μ.Lock()
 				defer p.μ.Unlock()
 
-				// N.B. the call may have completed while we were waiting.
+				// The call may have completed while we were waiting.
+				// If not, however, we do not release the request ID, otherwise a
+				// subsequent call may attempt to reuse it and get a spurious
+				// duplicate request error because the peer hasn't yet yielded it.
 				if pc, ok := p.ocall[id]; ok {
-					p.releaseID(id)
+					p.ocall[id] = nil // pin the ID
 					pc.deliver(&Response{RequestID: id, Code: CodeCanceled})
 				}
 			})
@@ -326,7 +329,7 @@ func (p *Peer) fail(err error) {
 
 	// Terminate all incomplete pending (outbound) calls.
 	for _, pc := range p.ocall {
-		close(pc)
+		pc.close()
 	}
 	p.ocall = nil
 
@@ -589,7 +592,18 @@ func (p *Peer) closeOut() {
 
 type pending chan *Response
 
-func (p pending) deliver(r *Response) { p <- r; close(p) }
+func (p pending) close() {
+	if p != nil {
+		close(p)
+	}
+}
+
+func (p pending) deliver(r *Response) {
+	if p != nil {
+		p <- r
+		close(p)
+	}
+}
 
 func callError(err error) *CallError { return &CallError{Err: err} }
 
