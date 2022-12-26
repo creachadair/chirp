@@ -303,7 +303,9 @@ func (p *Peer) LogPackets(log PacketLogger) *Peer {
 }
 
 // NewContext registers a function that will be called to create a new base
-// context for method handlers. If it is not set a background context is used.
+// context for method and packet handlers. This allows request-specific host
+// resources to be plumbed into a handler.  If it is not set a background
+// context is used.
 func (p *Peer) NewContext(base func() context.Context) *Peer {
 	p.μ.Lock()
 	defer p.μ.Unlock()
