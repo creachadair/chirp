@@ -151,7 +151,7 @@ func (r *Request) UnmarshalBinary(data []byte) error {
 
 // String returns a human-friendly rendering of the request.
 func (r Request) String() string {
-	return fmt.Sprintf("Request(ID=%v, Method=%v, Data=%+v)", r.RequestID, r.MethodID, r.Data)
+	return fmt.Sprintf("Request(ID=%v, Method=%v, %s)", r.RequestID, r.MethodID, trimData(r.Data))
 }
 
 // Response is the payload format for a Chirp v0 response packet.
@@ -199,11 +199,7 @@ func (r Response) String() string {
 		}
 	}
 	if data == "" {
-		if len(r.Data) > 16 {
-			data = fmt.Sprintf("Data=%+v ...", r.Data[:16])
-		} else {
-			data = fmt.Sprintf("Data=%+v", r.Data)
-		}
+		data = trimData(r.Data)
 	}
 	return fmt.Sprintf("Response(ID=%v, Code=%v, %s)", r.RequestID, r.Code, data)
 }
@@ -290,6 +286,13 @@ func (e ErrorData) Encode() []byte {
 	copy(buf[4:], msg)
 	copy(buf[4+mlen:], e.Data)
 	return buf
+}
+
+func trimData(data []byte) string {
+	if len(data) > 16 {
+		return fmt.Sprintf("Data=%v +%d...", data[:16], len(data)-16)
+	}
+	return fmt.Sprintf("Data=%v", data)
 }
 
 // truncate returns a prefix of a UTF-8 string s, having length no greater than
