@@ -1,20 +1,18 @@
 package channel_test
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
+	"github.com/creachadair/taskgroup"
 )
 
 func TestDirect(t *testing.T) {
 	c, s := channel.Direct()
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g := taskgroup.New(nil)
+	g.Go(func() error {
 		pkt := new(chirp.Packet)
 		if err := c.Send(pkt); err != nil {
 			t.Errorf("A Send: %v", err)
@@ -26,11 +24,9 @@ func TestDirect(t *testing.T) {
 		if got != pkt {
 			t.Errorf("Packet: got %v, want %v", got, pkt)
 		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+		return nil
+	})
+	g.Go(func() error {
 		pkt, err := s.Recv()
 		if err != nil {
 			t.Errorf("B Recv: %v", err)
@@ -38,9 +34,10 @@ func TestDirect(t *testing.T) {
 		if err := s.Send(pkt); err != nil {
 			t.Errorf("B Send: %v", err)
 		}
-	}()
+		return nil
+	})
+	g.Wait()
 
-	wg.Wait()
 	if err := c.Close(); err != nil {
 		t.Errorf("c.Close: %v", err)
 	}

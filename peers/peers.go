@@ -9,6 +9,7 @@ import (
 
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
+	"github.com/creachadair/taskgroup"
 )
 
 // Local is a pair of in-memory connected peers, suitable for testing.
@@ -47,32 +48,29 @@ type Accepter interface {
 // When ctx terminates, all running peers are stopped. When acc closes, the
 // loop waits for running peers to exit before returning.
 func Loop(ctx context.Context, acc Accepter, newPeer func() *chirp.Peer) error {
-	var wg sync.WaitGroup
+	g := taskgroup.New(nil)
 	for {
 		ch, err := acc.Accept(ctx)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				err = nil
 			}
-			wg.Wait()
+			g.Wait()
 			return err
 		}
 
 		pool := sync.Pool{New: func() any { return newPeer() }}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		g.Go(func() error {
 			sctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
 			peer := pool.Get().(*chirp.Peer).Start(ch)
 			defer pool.Put(peer)
-			go func() { <-sctx.Done(); peer.Stop() }()
 
-			peer.Wait()
-		}()
+			go func() { <-sctx.Done(); peer.Stop() }()
+			return peer.Wait()
+		})
 	}
 }
 
@@ -91,14 +89,15 @@ func (n netAccepter) Accept(ctx context.Context) (chirp.Channel, error) {
 	// up when we return before ctx ends.
 	ok := make(chan struct{})
 	defer close(ok)
-	go func() {
+	taskgroup.Single(func() error {
 		select {
 		case <-ctx.Done():
 			n.Listener.Close()
 		case <-ok:
-			return // release the waiter
+			// release the waiter
 		}
-	}()
+		return nil
+	})
 
 	conn, err := n.Listener.Accept()
 	if err != nil {

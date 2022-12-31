@@ -27,13 +27,11 @@ func TestLoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	errc := make(chan error, 1)
-	go func() {
-		defer close(errc)
-		errc <- peers.Loop(ctx, peers.NetAccepter(lst), func() *chirp.Peer {
+	loop := taskgroup.Single(func() error {
+		return peers.Loop(ctx, peers.NetAccepter(lst), func() *chirp.Peer {
 			return chirp.NewPeer().Handle(100, slowEcho)
 		})
-	}()
+	})
 	t.Logf("Started peer loop...")
 
 	const numClients = 5
@@ -62,16 +60,7 @@ func TestLoop(t *testing.T) {
 	}
 	t.Logf("Clients finished, err=%v", g.Wait())
 	t.Logf("Closed listener, err=%v", lst.Close())
-
-	t.Log("Waiting for loop to exit...")
-	select {
-	case err := <-errc:
-		if err != nil {
-			t.Errorf("Error at exit: %v", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Error("Timed out at exit")
-	}
+	t.Logf("Loop exited, err=%v", loop.Wait())
 }
 
 func slowEcho(ctx context.Context, req *chirp.Request) ([]byte, error) {
