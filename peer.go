@@ -148,19 +148,27 @@ func treatErrorAsSuccess(err error) bool {
 	return errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed)
 }
 
+// waitTasks blocks until the service routines have finished, and reports
+// whether the peer was running.
+func (p *Peer) waitTasks() bool {
+	p.μ.Lock()
+	t := p.tasks
+	p.μ.Unlock()
+	if t == nil {
+		return false
+	}
+	t.Wait()
+	return true
+}
+
 // Wait blocks until p terminates and reports the error that cause it to stop.
 // After Wait completes it is safe to restart the peer with a new channel.
 //
-// If p stopped because of a closed channel, Wait returns nil; otherwise it
-// returns the error that triggered protocol failure.
+// If p is not running, or has stopped because of a closed channel, Wait
+// returns nil; otherwise it returns the error that triggered protocol failure.
 func (p *Peer) Wait() error {
-	if p.tasks == nil {
-		return nil
-	}
-	p.tasks.Wait() // service routine has exited
-
-	if treatErrorAsSuccess(p.err) {
-		return nil
+	if !p.waitTasks() {
+		return nil // the peer is not running
 	}
 
 	// Clean up peer state so it can be garbage collected.
@@ -173,6 +181,10 @@ func (p *Peer) Wait() error {
 	p.out.Unlock()
 	p.ocall = nil
 	p.icall = nil
+
+	if treatErrorAsSuccess(p.err) {
+		return nil
+	}
 	return p.err
 }
 
