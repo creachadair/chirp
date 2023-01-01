@@ -425,6 +425,64 @@ func TestCustomPacket(t *testing.T) {
 	}
 }
 
+func TestOnExit(t *testing.T) {
+	t.Run("CloseChannel", func(t *testing.T) {
+		defer leaktest.Check(t)()
+
+		loc := peers.NewLocal()
+		defer loc.B.Wait()
+
+		var cbCalled bool
+		loc.A.OnExit(func(err error) {
+			cbCalled = true
+			if err != nil {
+				t.Errorf("OnExit got an unexpected error: %v", err)
+			}
+		})
+
+		time.AfterFunc(5*time.Millisecond, func() { loc.A.Stop() })
+
+		if err := loc.A.Wait(); err != nil {
+			t.Errorf("Wait: got %v, want nil", err)
+		}
+		if !cbCalled {
+			t.Error("OnExit was not called")
+		}
+	})
+
+	t.Run("BadPacket", func(t *testing.T) {
+		defer leaktest.Check(t)()
+
+		sr, cw := io.Pipe()
+		_, sw := io.Pipe()
+		srv := channel.IO(sr, sw)
+
+		var cbCalled bool
+		var cbErr error
+		p := chirp.NewPeer().Start(srv).OnExit(func(err error) {
+			cbCalled = true
+			cbErr = err
+		})
+
+		cw.Write([]byte("CP\x00\x01\x00\x00\x00")) // short packet header
+		cw.Close()
+
+		if err := p.Wait(); err == nil {
+			t.Error("Wait should have reported an error")
+		} else {
+			t.Logf("Wait reported: %v (OK)", err)
+		}
+
+		if !cbCalled {
+			t.Error("OnExit was not called")
+		} else if cbErr == nil {
+			t.Error("OnExit should have reported an error")
+		} else {
+			t.Logf("OnExit reported: %v (OK)", cbErr)
+		}
+	})
+}
+
 func TestContextPlumbing(t *testing.T) {
 	defer leaktest.Check(t)()
 
