@@ -290,9 +290,9 @@ func (e ErrorData) Encode() []byte {
 
 func trimData(data []byte) string {
 	if len(data) > 16 {
-		return fmt.Sprintf("Data=%v +%d...", data[:16], len(data)-16)
+		return fmt.Sprintf("Data=%q +%d...", data[:16], len(data)-16)
 	}
-	return fmt.Sprintf("Data=%v", data)
+	return fmt.Sprintf("Data=%q", data)
 }
 
 // truncate returns a prefix of a UTF-8 string s, having length no greater than
