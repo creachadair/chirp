@@ -558,6 +558,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		if err := req.UnmarshalBinary(pkt.Payload); err != nil {
 			return fmt.Errorf("invalid cancel packet: %w", err)
 		}
+		peerMetrics.cancelIn.Add(1)
 		p.μ.Lock()
 		defer p.μ.Unlock()
 

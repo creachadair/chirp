@@ -11,6 +11,7 @@ var peerMetrics struct {
 	callInErr     expvar.Int // number of inbound calls reporting an error
 	callOut       expvar.Int // number of outbound calls initiated
 	callOutErr    expvar.Int // number of outbound calls reporting an error
+	cancelIn      expvar.Int // number of cancellations received
 	callActive    expvar.Int // inbound
 	callPending   expvar.Int // outbound
 
@@ -28,6 +29,7 @@ func init() {
 	m.Set("calls_active", &peerMetrics.callActive)
 	m.Set("calls_out", &peerMetrics.callOut)
 	m.Set("calls_out_failed", &peerMetrics.callOutErr)
+	m.Set("cancels_in", &peerMetrics.cancelIn)
 	m.Set("calls_pending", &peerMetrics.callPending)
 
 	peerMetrics.emap = m
