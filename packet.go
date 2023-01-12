@@ -3,8 +3,10 @@ package chirp
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"unicode/utf8"
 )
 
 // Packet is the parsed format of a Chirp v0 packet.
@@ -334,8 +336,12 @@ func (e *ErrorData) UnmarshalBinary(data []byte) error {
 	if 4+mlen > len(data) {
 		return fmt.Errorf("error message truncated (%d > %d bytes)", 4+mlen, len(data))
 	}
+	msg := data[4 : 4+mlen]
+	if !utf8.Valid(msg) {
+		return errors.New("error message is not valid UTF-8")
+	}
 	e.Code = binary.BigEndian.Uint16(data[0:])
-	e.Message = string(data[4 : 4+mlen])
+	e.Message = string(msg)
 	e.Data = data[4+mlen:]
 	if len(e.Data) == 0 {
 		e.Data = nil

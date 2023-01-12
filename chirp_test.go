@@ -747,4 +747,15 @@ func TestRegression(t *testing.T) {
 			t.Logf("Decoding ErrorData: got expected error: %v", err)
 		}
 	})
+
+	t.Run("ErrorUTF8", func(t *testing.T) {
+		const input = "\x01\x02\x00\x04abc\xc0----"
+
+		var ed chirp.ErrorData
+		if err := ed.UnmarshalBinary([]byte(input)); err == nil {
+			t.Errorf("ErrorData: got %#v, wanted error", ed)
+		} else {
+			t.Logf("Decoding ErrorData: got expected error: %v", err)
+		}
+	})
 }
