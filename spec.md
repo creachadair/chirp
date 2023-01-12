@@ -116,7 +116,7 @@ The response data in case of a service error uses the following structure:
 
 - The **Auxiliary data** are an uninterpreted sequence of bytes chosen by the handler (empty OK). This field can be used to pass application-specific structured error information back to the caller.
 
-As a special case, then implementation SHALL treat an empty byte array as a valid encoding for error data with error code 0, an empty description, and empty auxiliary data.
+As a special case, the implementation SHALL treat an empty byte array as a valid encoding for error data with error code 0, an empty description, and empty auxiliary data.
 
 ### Cancel Payload
 
