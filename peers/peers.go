@@ -89,7 +89,7 @@ func (n netAccepter) Accept(ctx context.Context) (chirp.Channel, error) {
 	// up when we return before ctx ends.
 	ok := make(chan struct{})
 	defer close(ok)
-	taskgroup.Single(func() error {
+	taskgroup.Go(func() error {
 		select {
 		case <-ctx.Done():
 			n.Listener.Close()

@@ -27,7 +27,7 @@ func TestLoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	loop := taskgroup.Single(func() error {
+	loop := taskgroup.Go(func() error {
 		return peers.Loop(ctx, peers.NetAccepter(lst), func() *chirp.Peer {
 			return chirp.NewPeer().Handle(100, slowEcho)
 		})
