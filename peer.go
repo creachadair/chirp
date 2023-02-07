@@ -448,10 +448,9 @@ func (p *Peer) sendCancel(id uint32) {
 	}
 }
 
-// dispatchRequest dispatches an inbound request to its handler. It reports an
-// error back to the caller for duplicate request ID or unknown method.
-// The caller must hold p.μ.
-func (p *Peer) dispatchRequest(req *Request) (err error) {
+// dispatchRequestLocked dispatches an inbound request to its handler.
+// It reports an error back to the caller for duplicate request ID or unknown method.
+func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 	peerMetrics.callIn.Add(1)
 	defer func() {
 		if err != nil {
@@ -538,7 +537,6 @@ func (p *Peer) dispatchRequest(req *Request) (err error) {
 
 // dispatchPacket routes an inbound packet from the remote peer.
 // Any error it reports is protocol fatal.
-// The caller must hold p.μ.
 func (p *Peer) dispatchPacket(pkt *Packet) error {
 	if p.plog != nil {
 		p.plog(PacketInfo{Packet: pkt, Sent: false})
@@ -551,7 +549,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		}
 		p.μ.Lock()
 		defer p.μ.Unlock()
-		return p.dispatchRequest(&req)
+		return p.dispatchRequestLocked(&req)
 
 	case PacketCancel:
 		var req Cancel
