@@ -431,7 +431,7 @@ func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
 	p.μ.Lock()
 	defer p.μ.Unlock()
 	if err != nil {
-		p.releaseID(id)
+		p.releaseIDLocked(id)
 		return 0, nil, err
 	}
 	return id, pc, nil
@@ -581,7 +581,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 			return nil
 		}
 
-		p.releaseID(rsp.RequestID)
+		p.releaseIDLocked(rsp.RequestID)
 		pc.deliver(&rsp) // does not block
 
 	default:
@@ -608,8 +608,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 }
 
 // releaseID releases the call state for the specified outbound request id.
-// The caller must hold p.μ.
-func (p *Peer) releaseID(id uint32) {
+func (p *Peer) releaseIDLocked(id uint32) {
 	delete(p.ocall, id)
 	if len(p.ocall) == 0 {
 		p.nexto = 0
