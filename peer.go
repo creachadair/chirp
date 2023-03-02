@@ -252,7 +252,10 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 					return nil, &CallError{Err: context.Canceled, rsp: rsp}
 				}
 				ce := &CallError{rsp: rsp}
-				if err := ce.ErrorData.UnmarshalBinary(rsp.Data); err == nil {
+
+				// Try to decode the error data, but if that fails use the string
+				// from the failure message so the caller has a way to debug.
+				if err := ce.ErrorData.UnmarshalBinary(rsp.Data); err != nil {
 					ce.Message = err.Error()
 				}
 				return nil, ce
