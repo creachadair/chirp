@@ -252,7 +252,7 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 					return nil, &CallError{Err: context.Canceled, rsp: rsp}
 				}
 				ce := &CallError{rsp: rsp}
-				if err := ce.ErrorData.UnmarshalBinary(rsp.Data); err != nil {
+				if err := ce.ErrorData.UnmarshalBinary(rsp.Data); err == nil {
 					ce.Message = err.Error()
 				}
 				return nil, ce
