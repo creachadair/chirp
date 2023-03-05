@@ -70,7 +70,11 @@ func TestPeer(t *testing.T) {
 		{loc.B, 100, "edata 17 hey stuff", &chirp.Response{
 			Code: chirp.CodeServiceError,
 			Data: chirp.ErrorData{Code: 17, Message: "hey", Data: []byte("stuff")}.Encode(),
-		}}, // service error, handler-provided code and data
+		}}, // service error, handler-provided code and data (by value)
+		{loc.B, 100, "*edata 101 goober nonsense", &chirp.Response{
+			Code: chirp.CodeServiceError,
+			Data: chirp.ErrorData{Code: 101, Message: "goober", Data: []byte("nonsense")}.Encode(),
+		}}, // service error, handler-provided code and data (pointer)
 
 		{loc.B, 100, "peer?", &chirp.Response{Data: []byte("present")}}, // check context peer
 	}
@@ -658,6 +662,7 @@ func slowEcho(_ context.Context, req *chirp.Request) ([]byte, error) {
 //	ok text...        -- return text, nil
 //	error ...         -- return nil, error(...)
 //	edata c msg data  -- return nil, ErrorData{c, msg, data}
+//	*edata c msg data -- return nil, &ErrorData{c, msg, data}
 //	peer?             -- return x, nil where x == "present"/"absent"
 //
 // Any other value causes a panic.
@@ -673,7 +678,7 @@ func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
 	case "error":
 		return nil, errors.New(strings.Join(ps[1:], " "))
 
-	case "edata":
+	case "edata", "*edata":
 		if len(ps) != 4 {
 			break
 		}
@@ -681,11 +686,15 @@ func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
 		if err != nil {
 			break
 		}
-		return nil, &chirp.ErrorData{
+		ed := chirp.ErrorData{
 			Code:    uint16(c),
 			Message: ps[2],
 			Data:    []byte(ps[3]),
 		}
+		if ps[0] == "*edata" {
+			return nil, &ed
+		}
+		return nil, ed
 
 	case "peer?":
 		if len(ps) == 1 {
