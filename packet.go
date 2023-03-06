@@ -1,7 +1,6 @@
 package chirp
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -18,23 +17,16 @@ type Packet struct {
 
 // Encode encodes p in binary format.
 func (p Packet) Encode() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, 8+len(p.Payload)))
-	if _, err := p.WriteTo(buf); err != nil {
-		panic(fmt.Errorf("encoding packet: %w", err))
-	}
-	return buf.Bytes()
+	buf := make([]byte, 0, 8+len(p.Payload))
+	buf = append(buf, 'C', 'P', p.Protocol, byte(p.Type))
+	buf = binary.BigEndian.AppendUint32(buf, uint32(len(p.Payload)))
+	buf = append(buf, p.Payload...)
+	return buf
 }
 
 // WriteTo writes the packet to w in binary format. It satisfies io.WriterTo.
 func (p *Packet) WriteTo(w io.Writer) (int64, error) {
-	buf := [8]byte{'C', 'P', p.Protocol, byte(p.Type)}
-	binary.BigEndian.PutUint32(buf[4:], uint32(len(p.Payload)))
-	nw, err := w.Write(buf[:])
-	if err == nil && len(p.Payload) != 0 {
-		var np int
-		np, err = w.Write(p.Payload)
-		nw += np
-	}
+	nw, err := w.Write(p.Encode())
 	return int64(nw), err
 }
 
