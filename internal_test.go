@@ -1,6 +1,9 @@
 package chirp
 
-import "testing"
+import (
+	"testing"
+	"unicode/utf8"
+)
 
 func TestUTF8Truncation(t *testing.T) {
 	tests := []struct {
@@ -24,6 +27,10 @@ func TestUTF8Truncation(t *testing.T) {
 		got := truncate(tc.input, tc.size)
 		if got != tc.want {
 			t.Errorf("truncate(%q, %d): got %q, want %q", tc.input, tc.size, got, tc.want)
+		}
+
+		if !utf8.ValidString(got) {
+			t.Errorf("truncate(%q, %d): result %q is not valid UTF-8", tc.input, tc.size, got)
 		}
 	}
 }
