@@ -1,4 +1,4 @@
-// Packet chirp implements the Chirp v0 protocol.
+// Package chirp implements the Chirp v0 protocol.
 //
 // Chirp is a lightweight remote procedure call protocol. Peers exchange binary
 // packets over a shared reliable channel.  The protocol is intended to be easy
