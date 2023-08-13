@@ -1,6 +1,6 @@
 module github.com/creachadair/chirp
 
-go 1.19
+go 1.20
 
 require (
 	github.com/creachadair/taskgroup v0.6.0
