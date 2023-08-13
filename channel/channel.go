@@ -1,3 +1,5 @@
+// Copyright (C) 2022 Michael J. Fromberger. All Rights Reserved.
+
 // Package channel provides implementations of the chirp.Channel interface.
 package channel
 

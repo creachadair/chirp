@@ -1,3 +1,5 @@
+// Copyright (C) 2022 Michael J. Fromberger. All Rights Reserved.
+
 // Package chirp implements the Chirp v0 protocol.
 //
 // Chirp is a lightweight remote procedure call protocol. Peers exchange binary

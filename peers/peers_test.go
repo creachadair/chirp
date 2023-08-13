@@ -1,3 +1,5 @@
+// Copyright (C) 2022 Michael J. Fromberger. All Rights Reserved.
+
 package peers_test
 
 import (

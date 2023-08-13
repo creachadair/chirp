@@ -1,3 +1,5 @@
+// Copyright (C) 2022 Michael J. Fromberger. All Rights Reserved.
+
 // Package peers provides support code for managing and testing peers.
 package peers
 
