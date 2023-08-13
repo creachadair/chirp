@@ -88,6 +88,15 @@ func ResultError[R any](f func(context.Context) (R, error)) chirp.Handler {
 	}
 }
 
+// ResultOnly adapts a function f that accepts no parameters and returns a
+// result of type R without error, to a chirp.Handler.
+func ResultOnly[R any](f func(context.Context) R) chirp.Handler {
+	return func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		hctx := context.WithValue(ctx, reqContextKey{}, req)
+		return marshal(f(hctx))
+	}
+}
+
 // unmarshal decodes data into v. The concrete type of v must be a pointer to a
 // []byte or string, or must implement either the encoding.BinaryUnmarshaler
 // interface or the encoding.TextUnmarshaler interface.  If v implements both,

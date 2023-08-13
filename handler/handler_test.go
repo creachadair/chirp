@@ -198,4 +198,27 @@ func TestHandler(t *testing.T) {
 			))
 		})
 	})
+
+	t.Run("RO", func(t *testing.T) {
+		t.Run("String", func(t *testing.T) {
+			check(t, "please", "", handler.ResultOnly(
+				func(ctx context.Context) string { checkReq(t, ctx); return "please" },
+			))
+		})
+		t.Run("Byte", func(t *testing.T) {
+			check(t, "clap", "", handler.ResultOnly(
+				func(ctx context.Context) []byte { checkReq(t, ctx); return []byte("clap") },
+			))
+		})
+		t.Run("Text", func(t *testing.T) {
+			check(t, "more", "", handler.ResultOnly(
+				func(ctx context.Context) tvText { checkReq(t, ctx); return "more" },
+			))
+		})
+		t.Run("Binary", func(t *testing.T) {
+			check(t, "loudly", "", handler.ResultOnly(
+				func(ctx context.Context) tvBinary { checkReq(t, ctx); return "loudly" },
+			))
+		})
+	})
 }
