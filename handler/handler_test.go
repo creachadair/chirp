@@ -97,34 +97,22 @@ func TestHandler(t *testing.T) {
 	t.Run("PR", func(t *testing.T) {
 		t.Run("StringString", func(t *testing.T) {
 			check(t, "input-ok", "", handler.ParamResult(
-				func(ctx context.Context, s string) string {
-					checkReq(t, ctx)
-					return s + "-ok"
-				},
+				func(ctx context.Context, s string) string { checkReq(t, ctx); return s + "-ok" },
 			))
 		})
 		t.Run("StringByte", func(t *testing.T) {
 			check(t, "input-ok", "", handler.ParamResult(
-				func(ctx context.Context, s string) []byte {
-					checkReq(t, ctx)
-					return []byte(s + "-ok")
-				},
+				func(ctx context.Context, s string) []byte { checkReq(t, ctx); return []byte(s + "-ok") },
 			))
 		})
 		t.Run("TextByte", func(t *testing.T) {
 			check(t, "input-ok", "", handler.ParamResult(
-				func(ctx context.Context, s tvText) []byte {
-					checkReq(t, ctx)
-					return []byte(s + "-ok")
-				},
+				func(ctx context.Context, s tvText) []byte { checkReq(t, ctx); return []byte(s + "-ok") },
 			))
 		})
 		t.Run("BinaryText", func(t *testing.T) {
 			check(t, "input-ok", "", handler.ParamResult(
-				func(ctx context.Context, s tvBinary) tvText {
-					checkReq(t, ctx)
-					return tvText(s + "-ok")
-				},
+				func(ctx context.Context, s tvBinary) tvText { checkReq(t, ctx); return tvText(s + "-ok") },
 			))
 		})
 	})
@@ -132,18 +120,12 @@ func TestHandler(t *testing.T) {
 	t.Run("PE", func(t *testing.T) {
 		t.Run("String", func(t *testing.T) {
 			check(t, "", "service error: ok", handler.ParamError(
-				func(ctx context.Context, s string) error {
-					checkReq(t, ctx)
-					return errors.New("ok")
-				},
+				func(ctx context.Context, s string) error { checkReq(t, ctx); return errors.New("ok") },
 			))
 		})
 		t.Run("Byte", func(t *testing.T) {
 			check(t, "", "service error: ok", handler.ParamError(
-				func(ctx context.Context, b []byte) error {
-					checkReq(t, ctx)
-					return errors.New("ok")
-				},
+				func(ctx context.Context, b []byte) error { checkReq(t, ctx); return errors.New("ok") },
 			))
 		})
 		t.Run("Text", func(t *testing.T) {
