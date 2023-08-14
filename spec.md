@@ -157,7 +157,7 @@ While a session is active, each peer processes the packets sent by the other pee
 
 A **protocol fatal** condition represents an unrecoverable failure of the protocol.  For a protocol fatal error, the peer MUST immediately terminate the channel and report or log an error to the host.
 
-To **silently discard** a packet means that the receiving peer MUST fully consume the packet and MUST NOT send a response to the sending peer. Neither peer closes the channel. The receiving peer is free to log or the packet or report an error to the host.
+To **silently discard** a packet means that the receiving peer MUST fully consume the packet and MUST NOT send a response to the sending peer. Neither peer closes the channel. The receiving peer is free to log the packet or report an error to the host.
 
 To **respond with error** means that the receiving peer MUST fully consume the packet and send a response to the sending peer indicating the error condition. The channel is not closed.
 
