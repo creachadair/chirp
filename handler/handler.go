@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"encoding"
+	"encoding/json"
 	"fmt"
 
 	"github.com/creachadair/chirp"
@@ -148,3 +149,17 @@ func marshal(v any) ([]byte, error) {
 		return nil, fmt.Errorf("cannot marshal %T", v)
 	}
 }
+
+// JSONText wraps a JSON-marshalable value to implement the
+// encoding.TextMashaler and encoding.TextUnmarshaler interfaces.
+type JSONText[T any] struct {
+	Value T
+}
+
+// UnmarshalText unmarshals data into t.Value from a JSON text.
+func (t *JSONText[T]) UnmarshalText(data []byte) error {
+	return json.Unmarshal(data, &t.Value)
+}
+
+// MarshalText marshals t.Value to a JSON text.
+func (t JSONText[T]) MarshalText() ([]byte, error) { return json.Marshal(t.Value) }

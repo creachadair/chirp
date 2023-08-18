@@ -11,6 +11,7 @@ import (
 	"github.com/creachadair/chirp/handler"
 	"github.com/creachadair/chirp/peers"
 	"github.com/fortytw2/leaktest"
+	"github.com/google/go-cmp/cmp"
 )
 
 type tvText string
@@ -203,4 +204,28 @@ func TestHandler(t *testing.T) {
 			))
 		})
 	})
+}
+
+func TestJSONText(t *testing.T) {
+	type tv struct {
+		A string `json:"a"`
+		B int    `json:"b"`
+	}
+
+	var test handler.JSONText[tv]
+	if err := test.UnmarshalText([]byte(`{"a":"foo", "b": 25}`)); err != nil {
+		t.Fatalf("UnmarshalText: unexpected error: %v", err)
+	}
+	if diff := cmp.Diff(test.Value, tv{A: "foo", B: 25}); diff != "" {
+		t.Errorf("Result (-got, +want):\n%s", diff)
+	}
+
+	test.Value = tv{A: "bar", B: 100}
+	data, err := test.MarshalText()
+	if err != nil {
+		t.Fatalf("MarshalText: unexpected error: %v", err)
+	}
+	if got, want := string(data), `{"a":"bar","b":100}`; got != want {
+		t.Errorf("Result: got %#q, want %#q", got, want)
+	}
 }
