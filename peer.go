@@ -148,7 +148,8 @@ func (p *Peer) Start(ch Channel) *Peer {
 func (p *Peer) Metrics() *expvar.Map { return peerMetrics.emap }
 
 // Stop closes the channel and terminates the peer. It blocks until the peer
-// has exited and returns its status.
+// has exited and returns its status. After Stop completes it is safe to
+// restart the peer with a new channel.
 func (p *Peer) Stop() error { p.closeOut(); return p.Wait() }
 
 func treatErrorAsSuccess(err error) bool {
