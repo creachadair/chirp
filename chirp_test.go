@@ -752,7 +752,7 @@ func TestRegression(t *testing.T) {
 		const input = "\x00\x01\x00\x04abc"
 
 		var ed chirp.ErrorData
-		if err := ed.UnmarshalBinary([]byte(input)); err == nil {
+		if err := ed.Decode([]byte(input)); err == nil {
 			t.Errorf("ErrorData: got %#v, wanted error", ed)
 		} else {
 			t.Logf("Decoding ErrorData: got expected error: %v", err)
@@ -763,7 +763,7 @@ func TestRegression(t *testing.T) {
 		const input = "\x01\x02\x00\x04abc\xc0----"
 
 		var ed chirp.ErrorData
-		if err := ed.UnmarshalBinary([]byte(input)); err == nil {
+		if err := ed.Decode([]byte(input)); err == nil {
 			t.Errorf("ErrorData: got %#v, wanted error", ed)
 		} else {
 			t.Logf("Decoding ErrorData: got expected error: %v", err)

@@ -65,17 +65,17 @@ func (p *Packet) String() string {
 	switch p.Type {
 	case PacketRequest:
 		var req Request
-		if err := req.UnmarshalBinary(p.Payload); err == nil {
+		if err := req.Decode(p.Payload); err == nil {
 			pay = req.String()
 		}
 	case PacketCancel:
 		var can Cancel
-		if err := can.UnmarshalBinary(p.Payload); err == nil {
+		if err := can.Decode(p.Payload); err == nil {
 			pay = can.String()
 		}
 	case PacketResponse:
 		var rsp Response
-		if err := rsp.UnmarshalBinary(p.Payload); err == nil {
+		if err := rsp.Decode(p.Payload); err == nil {
 			pay = rsp.String()
 		}
 	}
@@ -129,9 +129,8 @@ func (r Request) Encode() []byte {
 	return buf
 }
 
-// UnmarshalBinary decodes data into a Chirp v0 request payload.
-// It implements encoding.BinaryUnmarshaler.
-func (r *Request) UnmarshalBinary(data []byte) error {
+// Decode decodes data into a Chirp v0 request payload.
+func (r *Request) Decode(data []byte) error {
 	if len(data) < 8 { // 4 request ID, 4 method ID
 		return fmt.Errorf("short request payload (%d bytes)", len(data))
 	}
@@ -166,9 +165,8 @@ func (r Response) Encode() []byte {
 	return buf
 }
 
-// UnmarshalBinary decodes data into a Chirp v0 response payload.
-// It implements encoding.BinaryUnmarshaler.
-func (r *Response) UnmarshalBinary(data []byte) error {
+// Decode decodes data into a Chirp v0 response payload.
+func (r *Response) Decode(data []byte) error {
 	if len(data) < 5 { // 4 request ID, 1 code
 		return fmt.Errorf("short response payload (%d bytes)", len(data))
 	}
@@ -190,7 +188,7 @@ func (r Response) String() string {
 	var data string
 	if r.Code == CodeServiceError {
 		var ed ErrorData
-		if ed.UnmarshalBinary(r.Data) == nil {
+		if ed.Decode(r.Data) == nil {
 			data = fmt.Sprintf("ErrorData(Code=%d, [%d bytes], %q)", ed.Code, len(ed.Data), ed.Message)
 		}
 	}
@@ -241,9 +239,8 @@ func (c Cancel) Encode() []byte {
 	return buf[:]
 }
 
-// UnmarshalBinary decodes data into a Chirp v0 cancel payload.
-// It impements encoding.BinaryUnmarshaler.
-func (c *Cancel) UnmarshalBinary(data []byte) error {
+// Decode decodes data into a Chirp v0 cancel payload.
+func (c *Cancel) Decode(data []byte) error {
 	if len(data) != 4 {
 		return fmt.Errorf("invalid cancel payload (%d bytes)", len(data))
 	}
@@ -315,9 +312,8 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
-// UnmarshalBinary decodes data into a Chirp v0 error data payload.
-// It implements encoding.BinaryUnmarshaler.
-func (e *ErrorData) UnmarshalBinary(data []byte) error {
+// Decode decodes data into a Chirp v0 error data payload.
+func (e *ErrorData) Decode(data []byte) error {
 	// Special case: An empty message is accepted as encoding empty details.
 	if len(data) == 0 {
 		*e = ErrorData{}

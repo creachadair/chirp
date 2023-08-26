@@ -263,7 +263,7 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 
 				// Try to decode the error data, but if that fails use the string
 				// from the failure message so the caller has a way to debug.
-				if err := ce.ErrorData.UnmarshalBinary(rsp.Data); err != nil {
+				if err := ce.ErrorData.Decode(rsp.Data); err != nil {
 					ce.Message = err.Error()
 				}
 				return nil, ce
@@ -555,7 +555,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 	switch pkt.Type {
 	case PacketRequest:
 		var req Request
-		if err := req.UnmarshalBinary(pkt.Payload); err != nil {
+		if err := req.Decode(pkt.Payload); err != nil {
 			return fmt.Errorf("invalid request packet: %w", err)
 		}
 		p.μ.Lock()
@@ -564,7 +564,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 
 	case PacketCancel:
 		var req Cancel
-		if err := req.UnmarshalBinary(pkt.Payload); err != nil {
+		if err := req.Decode(pkt.Payload); err != nil {
 			return fmt.Errorf("invalid cancel packet: %w", err)
 		}
 		peerMetrics.cancelIn.Add(1)
@@ -580,7 +580,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 
 	case PacketResponse:
 		var rsp Response
-		if err := rsp.UnmarshalBinary(pkt.Payload); err != nil {
+		if err := rsp.Decode(pkt.Payload); err != nil {
 			return fmt.Errorf("invalid response packet: %w", err)
 		}
 		p.μ.Lock()
