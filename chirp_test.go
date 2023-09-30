@@ -212,6 +212,62 @@ func TestCancellation(t *testing.T) {
 	}
 }
 
+func TestPeerExec(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	loc.A.
+		LogPackets(logPacket(t, "Peer A")).
+		Handle(1, func(context.Context, *chirp.Request) ([]byte, error) {
+			t.Log("handler: method 1")
+			return []byte("ok"), nil
+		}).
+		Handle(2, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			t.Log("handler: method 2")
+			// Forward the request to method 1 handler, should succeed.
+			return chirp.ContextPeer(ctx).Exec(ctx, 1, req)
+		}).
+		Handle(3, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			t.Log("handler: method 3")
+			// Forward the request to method 1000 handler, should fail.
+			// The data reported by this handler should not be seen by the caller.
+			_, err := chirp.ContextPeer(ctx).Exec(ctx, 1000, req)
+			return []byte("unseen"), err
+		}).
+		Handle(4, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			t.Log("handler: method 4")
+			// Forward the request to method 2 handler, which should forward it to 1.
+			return chirp.ContextPeer(ctx).Exec(ctx, 2, req)
+		})
+
+	ctx := context.Background()
+	for _, mid := range []uint32{2, 4} {
+		t.Run(fmt.Sprintf("Call%d", mid), func(t *testing.T) {
+			rsp, err := loc.B.Call(ctx, mid, nil)
+			if err != nil {
+				t.Errorf("Call %d: unexpected error: %v", mid, err)
+			}
+			if got, want := string(rsp.Data), "ok"; got != want {
+				t.Errorf("Call %d: got %q, want %q", mid, got, want)
+			}
+		})
+	}
+	t.Run("Call3", func(t *testing.T) {
+		rsp, err := loc.B.Call(ctx, 3, nil)
+		var cerr *chirp.CallError
+		if !errors.As(err, &cerr) {
+			t.Errorf("Call 3: got (%v, %v), want CallError", rsp, err)
+		} else if got := cerr.Response().Code; got != chirp.CodeUnknownMethod {
+			t.Errorf("Call 3: response code is %v, want %v", got, chirp.CodeUnknownMethod)
+		}
+		if rsp != nil {
+			t.Errorf("Call 3: response is %v, want nil", rsp)
+		}
+	})
+}
+
 func TestSlowCancellation(t *testing.T) {
 	defer leaktest.Check(t)()
 

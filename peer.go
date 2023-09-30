@@ -276,6 +276,25 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 	}
 }
 
+// errUnknownMethod is an internal sentinel used to signal an unknown method in
+// the Exec method. It is recognized by the dispatch plumbing so that a handler
+// reporting it will behave as if no handler was found.
+var errUnknownMethod = errors.New("exec: unknown method")
+
+// Exec executes the (local) handler on p for the methodID, if one exists.
+// If no handler is defined for methodID, Exec reports an internal error with
+// an empty result; otherwise it returns the result of calling the handler with
+// req.  The value of req.MethodID is ignored.
+func (p *Peer) Exec(ctx context.Context, methodID uint32, req *Request) ([]byte, error) {
+	p.μ.Lock()
+	handler, ok := p.imux[methodID]
+	p.μ.Unlock()
+	if !ok {
+		return nil, errUnknownMethod
+	}
+	return handler(ctx, req)
+}
+
 // Handle registers a handler for the specified method ID. It is safe to call
 // this while the peer is running. Passing a nil Handler removes any handler
 // for the specified ID. Handle returns p to permit chaining.
@@ -530,6 +549,9 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		} else if err == nil {
 			rsp.Code = CodeSuccess
 			rsp.Data = data
+		} else if errors.Is(err, errUnknownMethod) {
+			rsp.Code = CodeUnknownMethod
+			// N.B. discard any data the handler might have reported
 		} else if ed, ok := err.(*ErrorData); ok {
 			rsp.Code = CodeServiceError
 			rsp.Data = ed.Encode()
