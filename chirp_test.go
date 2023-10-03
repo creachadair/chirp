@@ -826,3 +826,97 @@ func TestRegression(t *testing.T) {
 		}
 	})
 }
+
+func TestCatalog(t *testing.T) {
+	cat := chirp.NewCatalog(map[string]uint32{
+		"test0": 0,
+		"test1": 100,
+	})
+
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	// The Peer method should return the bound peer.
+	ca := cat.Bind(loc.A)
+	if got := ca.Peer(); got != loc.A {
+		t.Errorf("ca.Peer: got %v, want %v", got, loc.A)
+	}
+	cb := cat.Bind(loc.B)
+	if got := cb.Peer(); got != loc.B {
+		t.Errorf("ca.Peer: got %v, want %v", got, loc.B)
+	}
+
+	// The original catalog does not have a peer.
+	if got := cat.Peer(); got != nil {
+		t.Errorf("cat.Peer: got %v, want nil", got)
+	}
+	ctx := context.Background()
+
+	ca.
+		Handle("test0", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			return []byte("default"), nil
+		}).
+		Handle("test1", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			return []byte("one"), nil
+		})
+
+	t.Run("HandleUnknown", func(t *testing.T) {
+		defer func() {
+			x := recover()
+			if x == nil {
+				t.Fatal("Expected a panic")
+			} else {
+				t.Logf("Got expected panic: %v", x)
+			}
+		}()
+		ca.Handle("nonesuch", nil)
+	})
+
+	checkCall := func(t *testing.T, name, want string) {
+		t.Helper()
+		rsp, err := cb.Call(ctx, name, nil)
+		if err != nil {
+			t.Fatalf("Call %q unexpectedly failed: %v", name, err)
+		} else if got := string(rsp.Data); got != want {
+			t.Fatalf("Call %q: got %q, want %q", name, got, want)
+		}
+	}
+
+	t.Run("Call0_B", func(t *testing.T) { checkCall(t, "test0", "default") })
+	t.Run("Call1_B", func(t *testing.T) { checkCall(t, "test1", "one") })
+	t.Run("Call2_B", func(t *testing.T) { checkCall(t, "test2", "default") }) // fall through to default
+	t.Run("CallUnknown_B", func(t *testing.T) { checkCall(t, "nonesuch", "default") })
+
+	// Add a new binding to the catalog and exercise it.
+	cat.Set("test2", 935)
+	ca.Handle("test2", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		return []byte("two"), nil
+	})
+	t.Run("Call2_B_Defined", func(t *testing.T) { checkCall(t, "test2", "two") })
+
+	t.Run("CallUnknown_A", func(t *testing.T) {
+		if rsp, err := ca.Call(ctx, "nonesuch", nil); err == nil {
+			t.Errorf("Call nonesuch: got %q, want error", rsp)
+		}
+	})
+
+	checkExec := func(t *testing.T, name, want string) {
+		t.Helper()
+		data, err := ca.Exec(ctx, name, &chirp.Request{RequestID: 1, MethodID: 999})
+		if err != nil {
+			t.Fatalf("Exec %q unexpectedly failed: %v", name, err)
+		} else if got := string(data); got != want {
+			t.Fatalf("Exec %q: got %q, want %q", name, got, want)
+		}
+	}
+
+	t.Run("Exec0_A", func(t *testing.T) { checkExec(t, "test0", "default") })
+	t.Run("Exec1_A", func(t *testing.T) { checkExec(t, "test1", "one") })
+	t.Run("ExecUnknown_A", func(t *testing.T) { checkExec(t, "nonesuch", "default") })
+
+	t.Run("ExecUnknown_B", func(t *testing.T) {
+		if data, err := cb.Exec(ctx, "nonesuch", &chirp.Request{RequestID: 1, MethodID: 999}); err == nil {
+			t.Errorf("Exec nonesuch: got %q, want error", data)
+		}
+	})
+}

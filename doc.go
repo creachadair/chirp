@@ -75,3 +75,70 @@
 // received matching the specified type. If the callback reports an error or
 // panics, it is treated as protocol fatal.
 package chirp
+
+import (
+	"context"
+	"fmt"
+	"maps"
+)
+
+// A Catalog associates a peer with a static mapping from method names to IDs
+// for use with that peer. A Catalog can be used to give mnemonic names to
+// methods to share across packages.  Method names are not exchanged between
+// peers on the wire.
+type Catalog struct {
+	peer    *Peer
+	methods map[string]uint32
+}
+
+// NewCatalog creates a new unbound catalog with the given method name to ID
+// mapping. The keys of the map define which methods a peer can bind or call.
+// The input map is copied, and subsequent modifications of the input map do
+// not affect the catalog.
+func NewCatalog(methods map[string]uint32) Catalog {
+	return Catalog{methods: maps.Clone(methods)}
+}
+
+// Set maps name to methodID in c, and return c to allow chaining.  If name was
+// already mapped in c, the existing mapping is replaced. The name mapping of a
+// catalog is shared among all the copies derived from it.
+//
+// It is not safe to call Set while c is used concurrently by other goroutines
+// without external synchronization.
+func (c Catalog) Set(name string, methodID uint32) Catalog {
+	c.methods[name] = methodID
+	return c
+}
+
+// Bind returns a copy of c bound to the specified peer.
+func (c Catalog) Bind(peer *Peer) Catalog { return Catalog{peer: peer, methods: c.methods} }
+
+// Peer returns the peer associated with c, or nil if the c is unbound.
+func (c Catalog) Peer() *Peer { return c.peer }
+
+// Call calls the method bound to name on the remote peer.
+// If name is not known in the catalog, Call uses method ID 0.
+// Call will panic if c is not bound to a peer.
+func (c Catalog) Call(ctx context.Context, name string, data []byte) (*Response, error) {
+	return c.peer.Call(ctx, c.methods[name], data)
+}
+
+// Exec calls the method bound to name on the local peer.
+// If name is not known in the catalog, Exec reports an error.
+// Exec will panic if c is not bound to a peer.
+func (c Catalog) Exec(ctx context.Context, name string, req *Request) ([]byte, error) {
+	return c.peer.Exec(ctx, c.methods[name], req)
+}
+
+// Handle binds the specified method to the peer associated with c,
+// and returns c to permit chaining.
+// Handle will panic if c is not bound to a peer, or if name is not a method
+// name known by the catalog.
+func (c Catalog) Handle(name string, handler Handler) Catalog {
+	methodID, ok := c.methods[name]
+	if !ok {
+		panic(fmt.Sprintf("method %q not known", name))
+	}
+	c.peer.Handle(methodID, handler)
+	return c
+}
