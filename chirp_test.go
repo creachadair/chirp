@@ -18,6 +18,7 @@ import (
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/chirp/peers"
+	"github.com/creachadair/mtest"
 	"github.com/creachadair/taskgroup"
 	"github.com/fortytw2/leaktest"
 	"github.com/google/go-cmp/cmp"
@@ -861,15 +862,7 @@ func TestCatalog(t *testing.T) {
 		})
 
 	t.Run("HandleUnknown", func(t *testing.T) {
-		defer func() {
-			x := recover()
-			if x == nil {
-				t.Fatal("Expected a panic")
-			} else {
-				t.Logf("Got expected panic: %v", x)
-			}
-		}()
-		ca.Handle("nonesuch", nil)
+		mtest.MustPanic(t, func() { ca.Handle("nonesuch", nil) })
 	})
 
 	checkCall := func(t *testing.T, name, want string) {
