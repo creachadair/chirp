@@ -78,8 +78,10 @@ package chirp
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"maps"
+	"sort"
 )
 
 // A Catalog associates a peer with a static mapping from method names to IDs
@@ -141,4 +143,78 @@ func (c Catalog) Handle(name string, handler Handler) Catalog {
 	}
 	c.peer.Handle(methodID, handler)
 	return c
+}
+
+// Encode encodes c in binary format.
+func (c Catalog) Encode() []byte {
+	// Encoded format:
+	//
+	//     <len1><name1> ... <lenN><nameN> <idN> ... <id1>
+	//
+	// Where <len> is a big-endian uint16, and <id> is a big-endian uint32.
+	if len(c.methods) == 0 {
+		return nil
+	}
+	var nlen int
+	names := make([]string, 0, len(c.methods))
+	for name := range c.methods {
+		names = append(names, name)
+		nlen += 2 + len(name) // +2 for length tag
+	}
+	sort.Strings(names)
+	buf := make([]byte, nlen+4*len(c.methods))
+	npos, mpos := 0, len(buf)
+	putName := func(s string) {
+		binary.BigEndian.PutUint16(buf[npos:], uint16(len(s)))
+		npos += 2
+		npos += copy(buf[npos:], s)
+	}
+	putMethod := func(id uint32) {
+		mpos -= 4
+		binary.BigEndian.PutUint32(buf[mpos:], id)
+	}
+
+	for _, name := range names {
+		putName(name)
+		putMethod(c.methods[name])
+	}
+	return buf
+}
+
+// Decode decodes data as a Catalog payload.
+func (c *Catalog) Decode(data []byte) error {
+	if c.methods == nil {
+		c.methods = make(map[string]uint32)
+	} else {
+		clear(c.methods)
+	}
+	npos, mpos := 0, len(data)
+	for {
+		if npos+2 > len(data) || npos > mpos {
+			return fmt.Errorf("truncated catalog at offset %d", npos)
+		} else if npos == mpos {
+			break
+		}
+
+		nlen := int(binary.BigEndian.Uint16(data[npos:]))
+		npos += 2
+		if npos+nlen > len(data) {
+			return fmt.Errorf("truncated name at offset %d", npos)
+		}
+
+		mpos -= 4
+		if mpos < npos+nlen {
+			return fmt.Errorf("truncated ID at offset %d", mpos)
+		}
+		id := binary.BigEndian.Uint32(data[mpos:])
+
+		c.methods[string(data[npos:npos+nlen])] = id
+		npos += nlen
+	}
+	return nil
+}
+
+// Handler is a Handler that reports the contents of the catalog.
+func (c Catalog) Handler(_ context.Context, req *Request) ([]byte, error) {
+	return c.Encode(), nil
 }

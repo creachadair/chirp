@@ -913,3 +913,46 @@ func TestCatalog(t *testing.T) {
 		}
 	})
 }
+
+func TestCatalogEncoding(t *testing.T) {
+	m := map[string]uint32{
+		"minsc":    101,
+		"boo":      102,
+		"dynaheir": 100987,
+		"viconia":  666,
+	}
+	checkEqual := func(t *testing.T, got, want chirp.Catalog) {
+		t.Helper()
+		if diff := cmp.Diff(got, want, cmp.AllowUnexported(chirp.Catalog{})); diff != "" {
+			t.Fatalf("Catalog: (-got, +want):\n%s", diff)
+		}
+	}
+
+	t.Run("RoundTrip", func(t *testing.T) {
+		want := chirp.NewCatalog(m)
+		enc := want.Encode()
+		t.Logf("Encoded catalog: %q", enc)
+		var got chirp.Catalog
+		if err := got.Decode(enc); err != nil {
+			t.Fatalf("Decode catalog: unexpected error: %v", err)
+		}
+		checkEqual(t, got, want)
+	})
+
+	t.Run("Handler", func(t *testing.T) {
+		cat := chirp.NewCatalog(m)
+		loc := peers.NewLocal()
+		defer loc.Stop()
+
+		loc.A.Handle(1, cat.Handler)
+		rsp, err := loc.B.Call(context.Background(), 1, nil)
+		if err != nil {
+			t.Fatalf("Call: unexpected error: %v", err)
+		}
+		var got chirp.Catalog
+		if err := got.Decode(rsp.Data); err != nil {
+			t.Fatalf("Decode response: unexpected error: %v", err)
+		}
+		checkEqual(t, got, cat)
+	})
+}
