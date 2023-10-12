@@ -940,15 +940,23 @@ func TestCatalogEncoding(t *testing.T) {
 	})
 
 	t.Run("Handler", func(t *testing.T) {
-		cat := chirp.NewCatalog(m)
 		loc := peers.NewLocal()
+		loc.A.LogPackets(logPacket(t, "A"))
 		defer loc.Stop()
 
-		loc.A.Handle(1, cat.Handler)
-		rsp, err := loc.B.Call(context.Background(), 1, nil)
+		// Set up a catalog with a method to query the catalog itself.
+		cat := chirp.NewCatalog(m).Set("catalog", 1)
+
+		// Bind the handler for that method on A.
+		cat.Bind(loc.A).Handle("catalog", cat.Handler)
+
+		// Call the catalog method from B.
+		rsp, err := cat.Bind(loc.B).Call(context.Background(), "catalog", nil)
 		if err != nil {
 			t.Fatalf("Call: unexpected error: %v", err)
 		}
+
+		// Make sure we got the same set back.
 		var got chirp.Catalog
 		if err := got.Decode(rsp.Data); err != nil {
 			t.Fatalf("Decode response: unexpected error: %v", err)
