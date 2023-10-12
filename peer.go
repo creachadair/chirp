@@ -40,15 +40,15 @@ type Channel interface {
 // error code 0 and the text of the error as its message. A handler may return
 // a value of concrete type ErrorData or *ErrorData to control the error code,
 // message, and auxiliary error data.
-type Handler = func(context.Context, *Request) ([]byte, error)
+type Handler func(context.Context, *Request) ([]byte, error)
 
 // A PacketHandler processes a packet from the remote peer. A packet handler
 // can obtain the peer from its context argument using the ContextPeer helper.
 // Any error reported by a packet handler is protocol fatal.
-type PacketHandler = func(context.Context, *Packet) error
+type PacketHandler func(context.Context, *Packet) error
 
 // A PacketLogger logs a packet exchanged with the remote peer.
-type PacketLogger = func(pkt PacketInfo)
+type PacketLogger func(pkt PacketInfo)
 
 // A PacketInfo combines a packet and a flag indicating whether the packet was
 // sent or received.
