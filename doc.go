@@ -101,6 +101,16 @@ func NewCatalog(methods map[string]uint32) Catalog {
 	return Catalog{methods: maps.Clone(methods)}
 }
 
+// Names returns the names bound in c in lexicographic order.
+func (c Catalog) Names() []string {
+	names := make([]string, 0, len(c.methods))
+	for name := range c.methods {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // Set maps name to methodID in c, and return c to allow chaining.  If name was
 // already mapped in c, the existing mapping is replaced. The name mapping of a
 // catalog is shared among all the copies derived from it.
@@ -149,7 +159,8 @@ func (c Catalog) Handle(name string, handler Handler) Catalog {
 func (c Catalog) Encode() []byte {
 	// Encoded format:
 	//
-	//     <len1><name1> ... <lenN><nameN> <idN> ... <id1>
+	//    | names in lexicgraphic order ... | ... ids in reverse name order
+	//    | <len1><name1> ... <lenN><nameN> | <idN> ... <id1>
 	//
 	// Where <len> is a big-endian uint16, and <id> is a big-endian uint32.
 	if len(c.methods) == 0 {

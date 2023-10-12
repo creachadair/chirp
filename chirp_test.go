@@ -928,6 +928,13 @@ func TestCatalogEncoding(t *testing.T) {
 		}
 	}
 
+	t.Run("Names", func(t *testing.T) {
+		got := chirp.NewCatalog(m).Names()
+		if diff := cmp.Diff(got, []string{"boo", "dynaheir", "minsc", "viconia"}); diff != "" {
+			t.Errorf("Names (-got, +want):\n%s", diff)
+		}
+	})
+
 	t.Run("RoundTrip", func(t *testing.T) {
 		want := chirp.NewCatalog(m)
 		enc := want.Encode()
