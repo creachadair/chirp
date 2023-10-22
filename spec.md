@@ -172,7 +172,7 @@ Channel failures, resource exhaustion, and fundamental errors in the protocol im
 
 **Implementation note:** Ordinary errors reported by host method handlers SHOULD NOT be protocol fatal.
 
-**Implementation note:** For the reserved packeg types defined by this specification, the implementation MUST treat invalid payloads as protocol failure unless otherwise noted. A payload may be invalid even if it is structurally valid, for example, a Response payload with a non-empty but malformed error data message is invalid.
+**Implementation note:** For the reserved packet types defined by this specification, the implementation MUST treat invalid payloads as protocol failure unless otherwise noted. A payload may be invalid even if it is structurally valid, for example, a Response payload with a non-empty but malformed error data message is invalid.
 
 #### Silent Discard Conditions
 
