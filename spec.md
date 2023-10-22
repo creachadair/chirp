@@ -110,7 +110,7 @@ The response data in case of a service error uses the following structure:
 | 4      | m     | Description (UTF-8 text)           |
 | 4+m    | rest  | Auxuiliary data                    |
 
-- The **Error code** is an uninterpreted machine-readable error code describing the meaning of the error. The implementation SHOULD permit the method handler to choose this value; otherwise the implementation SHOULD set this field to 0.
+- The **Error code** is an uninterpreted machine-readable error code describing the meaning of the error. The implementation SHOULD permit the method handler to choose this value; otherwise the implementation MUST set this field to 0.
 
 - The **Description** is a length-prefixed string giving a human-readable description of the error. This field MAY be empty but if non-empty MUST be encoded in UTF-8. The description MUST NOT exceed 65535 bytes in length; the implementation should truncate the message as necessary to fit within this constraint.
 
@@ -172,9 +172,7 @@ Channel failures, resource exhaustion, and fundamental errors in the protocol im
 
 **Implementation note:** Ordinary errors reported by host method handlers SHOULD NOT be protocol fatal.
 
-**Implementation note:** A payload may be invalid even if it is structurally valid, if it contains invalid data. For example, a Response payload with a non-empty but malformed error data message is invalid. For the reserved packet types defined in this specification, the implementation MUST treat invalid payloads as protocol fatal unless otherwise noted.
-
-For custom (implementation-defined) packet types, the validity of the payload is determined by the implementation. The implementation MAY respond to an invalid custom payload with an error, but otherwise MUST treat an invalid payload as protocol fatal.
+**Implementation note:** For the reserved packeg types defined by this specification, the implementation MUST treat invalid payloads as protocol failure unless otherwise noted. A payload may be invalid even if it is structurally valid, for example, a Response payload with a non-empty but malformed error data message is invalid.
 
 #### Silent Discard Conditions
 
@@ -191,6 +189,9 @@ A peer MUST **respond with error** for:
 - A Request packet with an unknown method ID (using result code 1).
 - A Request packet with a duplicated pending request ID (using result code 2).
 
+#### Custom Packet Payloads
+
+For custom (implementation-defined) packet types, the validity of the payload and the handling of an invalid payload are determined by the implementation. The implementation MAY treat invalid payloads for custom packet types with any of the above tactics (protocol fatal, respond with an error, or discard the packet silently). The implementation SHOULD document the choice clearly for all custom packet types.
 
 ### Call Subprotocol
 
