@@ -43,11 +43,14 @@
 // A Catalog provides a Handler method that can be bound to a peer to send the
 // catalog as a request payload:
 //
-//	// Bind a method that reports the method catalog.
-//	peer.Handle(1, cat.Handler)
+//	// Add a method that serves the catalog.
+//	cat.Set("catalog", 1)
 //
-//	// Add the catalog method to the catalog itself.
-//	cat.Set("catalog", 1).Handle("catalog", cat.Handler)
+//	// Bind the catalog method to a peer.
+//	cat.Bind(peer1).Handle("catalog", cat.Handler)
+//
+//	// Call the catalog from another peer.
+//	rsp, err := cat.Bind(peer2).Call(ctx, "catalog", nil)
 package catalog
 
 import (
