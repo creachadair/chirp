@@ -34,7 +34,7 @@
 //	  Handle("foo", handleFoo).
 //	  Handle("bar", handleBar)
 //
-// Note that Handle will panic if given a name not registerd with the catalog.
+// Note that Handle will panic if given a name not registered with the catalog.
 //
 // On a peer that wants to call these methods, use Call:
 //
