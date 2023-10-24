@@ -9,7 +9,7 @@ import (
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/catalog"
 	"github.com/creachadair/chirp/peers"
-	"github.com/creachadair/mtest"
+	"github.com/creachadair/mds/mtest"
 	"github.com/google/go-cmp/cmp"
 )
 
