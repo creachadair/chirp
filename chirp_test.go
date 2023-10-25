@@ -227,19 +227,19 @@ func TestPeerExec(t *testing.T) {
 		Handle(2, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 			t.Log("handler: method 2")
 			// Forward the request to method 1 handler, should succeed.
-			return chirp.ContextPeer(ctx).Exec(ctx, 1, req)
+			return chirp.ContextPeer(ctx).Exec(ctx, 1, req.Data)
 		}).
 		Handle(3, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 			t.Log("handler: method 3")
 			// Forward the request to method 1000 handler, should fail.
 			// The data reported by this handler should not be seen by the caller.
-			_, err := chirp.ContextPeer(ctx).Exec(ctx, 1000, req)
+			_, err := chirp.ContextPeer(ctx).Exec(ctx, 1000, req.Data)
 			return []byte("unseen"), err
 		}).
 		Handle(4, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 			t.Log("handler: method 4")
 			// Forward the request to method 2 handler, which should forward it to 1.
-			return chirp.ContextPeer(ctx).Exec(ctx, 2, req)
+			return chirp.ContextPeer(ctx).Exec(ctx, 2, req.Data)
 		})
 
 	ctx := context.Background()

@@ -288,18 +288,18 @@ type errUnknownMethod struct{}
 func (errUnknownMethod) Error() string          { return "exec: unknown method" }
 func (errUnknownMethod) ResultCode() ResultCode { return CodeUnknownMethod }
 
-// Exec executes the (local) handler on p for the methodID, if one exists.
-// If no handler is defined for methodID, Exec reports an internal error with
-// an empty result; otherwise it returns the result of calling the handler with
-// req.  The value of req.MethodID is ignored.
-func (p *Peer) Exec(ctx context.Context, methodID uint32, req *Request) ([]byte, error) {
+// Exec executes the (local) handler on p for the methodID, if one exists.  If
+// no handler is defined for methodID, Exec reports an internal error with an
+// empty result; otherwise it returns the result of calling the handler with
+// the given data.
+func (p *Peer) Exec(ctx context.Context, methodID uint32, data []byte) ([]byte, error) {
 	p.μ.Lock()
 	handler, ok := p.imux[methodID]
 	p.μ.Unlock()
 	if !ok {
 		return nil, errUnknownMethod{}
 	}
-	return handler(ctx, req)
+	return handler(ctx, &Request{MethodID: methodID, Data: data})
 }
 
 // Handle registers a handler for the specified method ID. It is safe to call

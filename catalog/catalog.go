@@ -130,8 +130,8 @@ func (c Catalog) Call(ctx context.Context, name string, data []byte) (*chirp.Res
 // Exec calls the method bound to name on the local peer.
 // If name is not known in the catalog, Exec reports an error.
 // Exec will panic if c is not bound to a peer.
-func (c Catalog) Exec(ctx context.Context, name string, req *chirp.Request) ([]byte, error) {
-	return c.peer.Exec(ctx, c.methods[name], req)
+func (c Catalog) Exec(ctx context.Context, name string, data []byte) ([]byte, error) {
+	return c.peer.Exec(ctx, c.methods[name], data)
 }
 
 // Handle binds the specified method to the peer associated with c,

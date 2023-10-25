@@ -81,7 +81,7 @@ func TestCatalogUsage(t *testing.T) {
 
 	checkExec := func(t *testing.T, name, want string) {
 		t.Helper()
-		data, err := ca.Exec(ctx, name, &chirp.Request{RequestID: 1, MethodID: 999})
+		data, err := ca.Exec(ctx, name, nil)
 		if err != nil {
 			t.Fatalf("Exec %q unexpectedly failed: %v", name, err)
 		} else if got := string(data); got != want {
@@ -94,7 +94,7 @@ func TestCatalogUsage(t *testing.T) {
 	t.Run("ExecUnknown_A", func(t *testing.T) { checkExec(t, "nonesuch", "default") })
 
 	t.Run("ExecUnknown_B", func(t *testing.T) {
-		if data, err := cb.Exec(ctx, "nonesuch", &chirp.Request{RequestID: 1, MethodID: 999}); err == nil {
+		if data, err := cb.Exec(ctx, "nonesuch", nil); err == nil {
 			t.Errorf("Exec nonesuch: got %q, want error", data)
 		}
 	})
