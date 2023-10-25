@@ -118,10 +118,13 @@ func (c Catalog) Peer() *chirp.Peer { return c.peer }
 func (c Catalog) Lookup(name string) uint32 { return c.methods[name] }
 
 // Call calls the method bound to name on the remote peer.
-// If name is not known in the catalog, Call uses method ID 0.
+// If name is not known in the catalog, Call reports an unknown method error.
 // Call will panic if c is not bound to a peer.
 func (c Catalog) Call(ctx context.Context, name string, data []byte) (*chirp.Response, error) {
-	return c.peer.Call(ctx, c.methods[name], data)
+	if id, ok := c.methods[name]; ok {
+		return c.peer.Call(ctx, id, data)
+	}
+	return nil, &chirp.CallError{Response: &chirp.Response{Code: chirp.CodeUnknownMethod}}
 }
 
 // Exec calls the method bound to name on the local peer.

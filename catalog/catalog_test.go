@@ -4,6 +4,7 @@ package catalog_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/creachadair/chirp"
@@ -37,12 +38,8 @@ func TestCatalogUsage(t *testing.T) {
 	ctx := context.Background()
 
 	ca.
-		Handle("test0", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
-			return []byte("default"), nil
-		}).
-		Handle("test1", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
-			return []byte("one"), nil
-		})
+		Handle("test0", handleStatic("default")).
+		Handle("test1", handleStatic("one"))
 
 	t.Run("HandleUnknown", func(t *testing.T) {
 		mtest.MustPanic(t, func() { ca.Handle("nonesuch", nil) })
@@ -57,24 +54,30 @@ func TestCatalogUsage(t *testing.T) {
 			t.Fatalf("Call %q: got %q, want %q", name, got, want)
 		}
 	}
+	checkUnknown := func(t *testing.T, c catalog.Catalog, name string) {
+		t.Helper()
+		rsp, err := c.Call(ctx, name, nil)
+		var ce *chirp.CallError
+		if !errors.As(err, &ce) {
+			t.Fatalf("Call %q: got error %v, want call error", name, err)
+		} else if ce.Response == nil || ce.Response.Code != chirp.CodeUnknownMethod {
+			t.Fatalf("Call %q: got response %+v, want UNKNOWN_METHOD", name, ce.Response)
+		} else if rsp != nil {
+			t.Errorf("Call %q: got non-nil response %v", name, rsp)
+		}
+	}
 
 	t.Run("Call0_B", func(t *testing.T) { checkCall(t, "test0", "default") })
 	t.Run("Call1_B", func(t *testing.T) { checkCall(t, "test1", "one") })
-	t.Run("Call2_B", func(t *testing.T) { checkCall(t, "test2", "default") }) // fall through to default
-	t.Run("CallUnknown_B", func(t *testing.T) { checkCall(t, "nonesuch", "default") })
+	t.Run("Call2_B", func(t *testing.T) { checkUnknown(t, cb, "test2") })
+	t.Run("CallUnknown_B", func(t *testing.T) { checkUnknown(t, cb, "nonesuch") })
 
 	// Add a new binding to the catalog and exercise it.
 	cat.Set("test2", 935)
-	ca.Handle("test2", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
-		return []byte("two"), nil
-	})
-	t.Run("Call2_B_Defined", func(t *testing.T) { checkCall(t, "test2", "two") })
+	ca.Handle("test2", handleStatic("two"))
 
-	t.Run("CallUnknown_A", func(t *testing.T) {
-		if rsp, err := ca.Call(ctx, "nonesuch", nil); err == nil {
-			t.Errorf("Call nonesuch: got %q, want error", rsp)
-		}
-	})
+	t.Run("Call2_B_Defined", func(t *testing.T) { checkCall(t, "test2", "two") })
+	t.Run("CallUnknown_A", func(t *testing.T) { checkUnknown(t, ca, "nonesuch") })
 
 	checkExec := func(t *testing.T, name, want string) {
 		t.Helper()
@@ -158,4 +161,8 @@ func TestCatalogEncoding(t *testing.T) {
 		}
 		checkEqual(t, got, cat)
 	})
+}
+
+func handleStatic(s string) chirp.Handler {
+	return func(context.Context, *chirp.Request) ([]byte, error) { return []byte(s), nil }
 }
