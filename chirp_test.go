@@ -91,7 +91,7 @@ func TestPeer(t *testing.T) {
 					t.Fatalf("Call: got error %[1]T (%[1]v), want *CallError", err)
 				}
 				t.Logf("CallError: %v", ce)
-				rsp = ce.Response()
+				rsp = ce.Response
 			}
 
 			// Ignore the RequestID field, which we can't correctly predict, and
@@ -259,7 +259,7 @@ func TestPeerExec(t *testing.T) {
 		var cerr *chirp.CallError
 		if !errors.As(err, &cerr) {
 			t.Errorf("Call 3: got (%v, %v), want CallError", rsp, err)
-		} else if got := cerr.Response().Code; got != chirp.CodeUnknownMethod {
+		} else if got := cerr.Response.Code; got != chirp.CodeUnknownMethod {
 			t.Errorf("Call 3: response code is %v, want %v", got, chirp.CodeUnknownMethod)
 		}
 		if rsp != nil {

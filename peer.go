@@ -257,9 +257,9 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 				if rsp.Code == CodeSuccess {
 					return rsp, nil
 				} else if rsp.Code == CodeCanceled {
-					return nil, &CallError{Err: context.Canceled, rsp: rsp}
+					return nil, &CallError{Err: context.Canceled, Response: rsp}
 				}
-				ce := &CallError{rsp: rsp}
+				ce := &CallError{Response: rsp}
 
 				// Try to decode the error data, but if that fails use the string
 				// from the failure message so the caller has a way to debug.
@@ -684,19 +684,14 @@ func (p pending) deliver(r *Response) {
 func callError(err error) *CallError { return &CallError{Err: err} }
 
 // CallError is the concrete type of errors reported by the Call method of a
-// Peer.  For a protocol fatal error, the Err field gives the underlying error
-// that caused the failure. Otherwise, Err is nil and the ErrorData field has
-// the error details reported by the peer.
+// Peer. For service errors, the Err field is nil and the ErrorData contains
+// the error details. For errors arising from a response, the Response field
+// contains the complete response message.
 type CallError struct {
 	ErrorData
-	Err error // nil for service errors
-
-	rsp *Response
+	Err      error     // nil for service errors
+	Response *Response // set if a the error came from a call response
 }
-
-// Response returns the response returned by the peer that provided the service
-// error details.  If c.Err != nil, this is nil.
-func (c *CallError) Response() *Response { return c.rsp }
 
 // Unwrap reports the underlying error of c. If c.Err == nil, this is nil.
 func (c *CallError) Unwrap() error { return c.Err }
@@ -705,10 +700,10 @@ func (c *CallError) Unwrap() error { return c.Err }
 func (c *CallError) Error() string {
 	if c.Err != nil {
 		return c.Err.Error()
-	} else if c.rsp.Code == CodeServiceError {
+	} else if c.Response.Code == CodeServiceError {
 		return fmt.Sprintf("service error: %v", c.ErrorData.Error())
 	}
-	return fmt.Sprintf("request %d: %s", c.rsp.RequestID, c.rsp.Code.String())
+	return fmt.Sprintf("request %d: %s", c.Response.RequestID, c.Response.Code.String())
 }
 
 type peerContextKey struct{}
