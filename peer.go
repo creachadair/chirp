@@ -276,10 +276,17 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 	}
 }
 
+// resultCoder is an extension interface an error may implement to override the
+// result code reported for the error.
+type resultCoder interface{ ResultCode() ResultCode }
+
 // errUnknownMethod is an internal sentinel used to signal an unknown method in
 // the Exec method. It is recognized by the dispatch plumbing so that a handler
 // reporting it will behave as if no handler was found.
-var errUnknownMethod = errors.New("exec: unknown method")
+type errUnknownMethod struct{}
+
+func (errUnknownMethod) Error() string          { return "exec: unknown method" }
+func (errUnknownMethod) ResultCode() ResultCode { return CodeUnknownMethod }
 
 // Exec executes the (local) handler on p for the methodID, if one exists.
 // If no handler is defined for methodID, Exec reports an internal error with
@@ -290,7 +297,7 @@ func (p *Peer) Exec(ctx context.Context, methodID uint32, req *Request) ([]byte,
 	handler, ok := p.imux[methodID]
 	p.μ.Unlock()
 	if !ok {
-		return nil, errUnknownMethod
+		return nil, errUnknownMethod{}
 	}
 	return handler(ctx, req)
 }
@@ -549,9 +556,9 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		} else if err == nil {
 			rsp.Code = CodeSuccess
 			rsp.Data = data
-		} else if errors.Is(err, errUnknownMethod) {
-			rsp.Code = CodeUnknownMethod
-			// N.B. discard any data the handler might have reported
+		} else if rc, ok := err.(resultCoder); ok {
+			rsp.Code = rc.ResultCode()
+			rsp.Data = data
 		} else if ed, ok := err.(*ErrorData); ok {
 			rsp.Code = CodeServiceError
 			rsp.Data = ed.Encode()
