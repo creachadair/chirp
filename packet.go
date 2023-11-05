@@ -19,10 +19,10 @@ type Packet struct {
 
 // Encode encodes p in binary format.
 func (p Packet) Encode() []byte {
-	buf := make([]byte, 0, 8+len(p.Payload))
-	buf = append(buf, 'C', 'P', p.Protocol, byte(p.Type))
-	buf = binary.BigEndian.AppendUint32(buf, uint32(len(p.Payload)))
-	buf = append(buf, p.Payload...)
+	buf := make([]byte, 8+len(p.Payload))
+	buf[0], buf[1], buf[2], buf[3] = 'C', 'P', p.Protocol, byte(p.Type)
+	binary.BigEndian.PutUint32(buf[4:], uint32(len(p.Payload)))
+	copy(buf[8:], p.Payload)
 	return buf
 }
 
