@@ -12,35 +12,40 @@ import (
 	"github.com/creachadair/chirp/peers"
 )
 
-func noop(context.Context, *chirp.Request) ([]byte, error) { return nil, nil }
+func noop(context.Context, *chirp.Request) ([]byte, error)       { return nil, nil }
+func echo(_ context.Context, req *chirp.Request) ([]byte, error) { return req.Data, nil }
 
 func BenchmarkCall(b *testing.B) {
-	b.Run("Direct", func(b *testing.B) {
+	var payload = []byte("fuzzy wuzzy was a bear\nfuzzy wuzzy had no hair\nfuzzy wuzzy wasn't fuzzy was he?")
+
+	b.Run("Direct-noop", func(b *testing.B) {
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
 		loc.A.Handle(1, noop)
-		runBench(b, loc.B)
+		runBench(b, loc.B, nil)
+	})
+	b.Run("Direct-echo", func(b *testing.B) {
+		loc := peers.NewLocal()
+		defer loc.Stop()
+
+		loc.A.Handle(1, echo)
+		runBench(b, loc.B, payload)
 	})
 
-	b.Run("IO", func(b *testing.B) {
-		ar, bw := io.Pipe()
-		br, aw := io.Pipe()
-		pa := chirp.NewPeer().Start(channel.IO(ar, aw)).Handle(1, noop)
-		pb := chirp.NewPeer().Start(channel.IO(br, bw))
-		defer func() {
-			if err := pa.Stop(); err != nil {
-				b.Errorf("A stop: %v", err)
-			}
-			if err := pb.Stop(); err != nil {
-				b.Errorf("B stop: %v", err)
-			}
-		}()
-		runBench(b, pb)
+	b.Run("IO-noop", func(b *testing.B) {
+		pa, pb := pipePeers(b)
+		pa.Handle(1, noop)
+		runBench(b, pb, nil)
+	})
+	b.Run("IO-echo", func(b *testing.B) {
+		pa, pb := pipePeers(b)
+		pa.Handle(1, echo)
+		runBench(b, pb, payload)
 	})
 }
 
-func runBench(b *testing.B, peer *chirp.Peer) {
+func runBench(b *testing.B, peer *chirp.Peer, data []byte) {
 	b.Helper()
 	ctx := context.Background()
 
@@ -50,4 +55,20 @@ func runBench(b *testing.B, peer *chirp.Peer) {
 			b.Fatal(err)
 		}
 	}
+}
+
+func pipePeers(tb testing.TB) (pa, pb *chirp.Peer) {
+	ar, bw := io.Pipe()
+	br, aw := io.Pipe()
+	pa = chirp.NewPeer().Start(channel.IO(ar, aw))
+	pb = chirp.NewPeer().Start(channel.IO(br, bw))
+	tb.Cleanup(func() {
+		if err := pa.Stop(); err != nil {
+			tb.Errorf("A stop: %v", err)
+		}
+		if err := pb.Stop(); err != nil {
+			tb.Errorf("B stop: %v", err)
+		}
+	})
+	return
 }
