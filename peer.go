@@ -206,10 +206,10 @@ func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
 	})
 }
 
-// Call sends a call for the specified method and data and blocks until ctx
-// ends or until the response is received. If ctx ends before the peer replies,
-// the call will be automatically cancelled.  An error reported by Call has
-// concrete type *CallError.
+// Call sends a call to the remote peer for the specified method and data, and
+// blocks until ctx ends or until the response is received. If ctx ends before
+// the peer replies, the call will be automatically cancelled.  An error
+// reported by Call has concrete type *CallError.
 func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Response, err error) {
 	peerMetrics.callOut.Add(1)
 	defer func() {
