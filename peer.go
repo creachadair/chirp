@@ -237,7 +237,7 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 
 			// Set a watchdog timer to ensure the call eventually gives up and
 			// reports an error, even if we don't get a reply from the peer.
-			time.AfterFunc(50*time.Millisecond, func() {
+			ct := time.AfterFunc(50*time.Millisecond, func() {
 				p.μ.Lock()
 				defer p.μ.Unlock()
 
@@ -250,6 +250,8 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 					pc.deliver(&Response{RequestID: id, Code: CodeCanceled})
 				}
 			})
+			// If the call succeeds before the watchdog expires, cancel it.
+			defer ct.Stop()
 			continue
 
 		case rsp, ok := <-pc:
