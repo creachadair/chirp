@@ -247,7 +247,7 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 				// duplicate request error because the peer hasn't yet yielded it.
 				if pc, ok := p.ocall[id]; ok {
 					p.ocall[id] = nil // pin the ID
-					pc.deliver(&Response{RequestID: id, Code: CodeCanceled})
+					pc.deliverLocked(&Response{RequestID: id, Code: CodeCanceled})
 				}
 			})
 			// If the call succeeds before the watchdog expires, cancel it.
@@ -624,7 +624,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		}
 
 		p.releaseIDLocked(rsp.RequestID)
-		pc.deliver(&rsp) // does not block
+		pc.deliverLocked(&rsp) // does not block
 
 	default:
 		p.μ.Lock()
@@ -683,7 +683,7 @@ func (p pending) close() {
 	}
 }
 
-func (p pending) deliver(r *Response) {
+func (p pending) deliverLocked(r *Response) {
 	if p != nil {
 		p <- r
 		close(p)
