@@ -22,25 +22,25 @@ func BenchmarkCall(b *testing.B) {
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
-		loc.A.Handle(1, noop)
+		loc.A.Handle("X", noop)
 		runBench(b, loc.B, nil)
 	})
 	b.Run("Direct-echo", func(b *testing.B) {
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
-		loc.A.Handle(1, echo)
+		loc.A.Handle("X", echo)
 		runBench(b, loc.B, payload)
 	})
 
 	b.Run("IO-noop", func(b *testing.B) {
 		pa, pb := pipePeers(b)
-		pa.Handle(1, noop)
+		pa.Handle("X", noop)
 		runBench(b, pb, nil)
 	})
 	b.Run("IO-echo", func(b *testing.B) {
 		pa, pb := pipePeers(b)
-		pa.Handle(1, echo)
+		pa.Handle("X", echo)
 		runBench(b, pb, payload)
 	})
 }
@@ -50,7 +50,7 @@ func runBench(b *testing.B, peer *chirp.Peer, data []byte) {
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		_, err := peer.Call(ctx, 1, nil)
+		_, err := peer.Call(ctx, "X", nil)
 		if err != nil {
 			b.Fatal(err)
 		}

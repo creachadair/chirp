@@ -57,12 +57,13 @@ The payload of a Request packet has the following structure:
 | Offset | Bytes | Description            |
 |--------|-------|------------------------|
 | 0      | 4     | Request ID (BE uint32) |
-| 4      | 4     | Method ID (BE uint32)  |
-| 4      | rest  | Parameter data         |
+| 4      | 1     | Method name length (n) |
+| 5      | n     | Method name            |
+| 5+n    | rest  | Parameter data         |
 
 - The **Request ID** is an identifier assigned by the caller. It must be unique among pending requests from that caller, but the caller is otherwise free to reuse request IDs for requests that are not concurrent.
 
-- The **Method ID** is a method identifier defined by the callee, opaque to the protocol.
+- The **Method name** is a string identifying the method to invoke. Method names are limited to 255 bytes but are otherwise opaque to the protocol. An empty method name is legal.
 
 - The **Parameter data** are an uninterpreted sequence of bytes (empty OK).
 
@@ -131,7 +132,7 @@ The payload of a Cancel packet has the following structure:
 
 ## Protocol Definition
 
-The current protocol is Version 0, indicated by the packet header `CP\x00`.
+The current protocol is Version 1, indicated by the packet header `CP\x00`.
 
 An implementation of the protocol consists of two components:
 
@@ -186,7 +187,7 @@ A peer MUST **silently discard**:
 
 A peer MUST **respond with error** for:
 
-- A Request packet with an unknown method ID (using result code 1).
+- A Request packet with an unknown method name (using result code 1).
 - A Request packet with a duplicated pending request ID (using result code 2).
 
 #### Custom Packet Payloads
