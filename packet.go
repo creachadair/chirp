@@ -265,6 +265,9 @@ func (c *Cancel) Decode(data []byte) error {
 func (c Cancel) String() string { return fmt.Sprintf("Cancel(ID=%v)", c.RequestID) }
 
 // ErrorData is the response data format for a service error response.
+//
+// An ErrorData value satisfies the error interface, allowing a handler to
+// return one to control the error code and ancillary data reported.
 type ErrorData struct {
 	Code    uint16
 	Message string
