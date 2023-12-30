@@ -54,12 +54,12 @@ All packet type values from 0 to 127 inclusive are reserved by the protocol and 
 
 The payload of a Request packet has the following structure:
 
-| Offset | Bytes | Description            |
-|--------|-------|------------------------|
-| 0      | 4     | Request ID (BE uint32) |
-| 4      | 1     | Method name length (n) |
-| 5      | n     | Method name            |
-| 5+n    | rest  | Parameter data         |
+| Offset | Bytes | Description                    |
+|--------|-------|--------------------------------|
+| 0      | 4     | Request ID (BE uint32)         |
+| 4      | 1     | Method name length (uint8 = n) |
+| 5      | n     | Method name                    |
+| 5+n    | rest  | Parameter data                 |
 
 - The **Request ID** is an identifier assigned by the caller. It must be unique among pending requests from that caller, but the caller is otherwise free to reuse request IDs for requests that are not concurrent.
 
