@@ -31,7 +31,7 @@ func TestLoop(t *testing.T) {
 
 	loop := taskgroup.Go(func() error {
 		return peers.Loop(ctx, peers.NetAccepter(lst), func() *chirp.Peer {
-			return chirp.NewPeer().Handle(100, slowEcho)
+			return chirp.NewPeer().Handle("100", slowEcho)
 		})
 	})
 	t.Logf("Started peer loop...")
@@ -52,7 +52,7 @@ func TestLoop(t *testing.T) {
 			defer conn.Close()
 			peer := chirp.NewPeer().Start(channel.IO(conn, conn))
 			for j := 0; j < numCalls; j++ {
-				_, err := peer.Call(context.Background(), 100, nil)
+				_, err := peer.Call(context.Background(), "100", nil)
 				if err != nil {
 					t.Errorf("Call %d: %v", j+1, err)
 				}

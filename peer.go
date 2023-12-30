@@ -96,7 +96,7 @@ type Peer struct {
 	ocall map[uint32]pending           // outbound calls pending responses
 	nexto uint32                       // next unused outbound call ID
 	icall map[uint32]func()            // requestID → cancel func
-	imux  map[uint32]Handler           // methodID → handler
+	imux  map[string]Handler           // methodName → handler
 	pmux  map[PacketType]PacketHandler // packetType → packet handler
 	plog  PacketLogger                 // what it says on the tin
 	base  func() context.Context       // return a new base context
@@ -210,7 +210,7 @@ func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
 // blocks until ctx ends or until the response is received. If ctx ends before
 // the peer replies, the call will be automatically cancelled.  An error
 // reported by Call has concrete type *CallError.
-func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Response, err error) {
+func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Response, err error) {
 	peerMetrics.callOut.Add(1)
 	defer func() {
 		if err != nil {
@@ -218,6 +218,9 @@ func (p *Peer) Call(ctx context.Context, method uint32, data []byte) (_ *Respons
 		}
 	}()
 
+	if len(method) > MaxMethodLen {
+		return nil, callError(fmt.Errorf("method %q name too long (%d bytes > %d)", method, len(method), MaxMethodLen))
+	}
 	id, pc, err := p.sendReq(method, data)
 	if err != nil {
 		return nil, callError(err)
@@ -290,36 +293,40 @@ type errUnknownMethod struct{}
 func (errUnknownMethod) Error() string          { return "exec: unknown method" }
 func (errUnknownMethod) ResultCode() ResultCode { return CodeUnknownMethod }
 
-// Exec executes the (local) handler on p for the methodID, if one exists.  If
-// no handler is defined for methodID, Exec reports an internal error with an
+// Exec executes the (local) handler on p for the method, if one exists.
+// If no handler is defined for method, Exec reports an internal error with an
 // empty result; otherwise it returns the result of calling the handler with
 // the given data.
-func (p *Peer) Exec(ctx context.Context, methodID uint32, data []byte) ([]byte, error) {
+func (p *Peer) Exec(ctx context.Context, method string, data []byte) ([]byte, error) {
 	p.μ.Lock()
-	handler, ok := p.imux[methodID]
+	handler, ok := p.imux[method]
 	p.μ.Unlock()
 	if !ok {
 		return nil, errUnknownMethod{}
 	}
-	return handler(ctx, &Request{MethodID: methodID, Data: data})
+	return handler(ctx, &Request{Method: method, Data: data})
 }
 
-// Handle registers a handler for the specified method ID. It is safe to call
+// Handle registers a handler for the specified method name. It is safe to call
 // this while the peer is running. Passing a nil Handler removes any handler
-// for the specified ID. Handle returns p to permit chaining.
+// for the specified method. Handle returns p to permit chaining.
 //
-// As a special case, if methodID == 0 the handler is called for any request
-// with a method ID that does not have a more specific handler registered.
-func (p *Peer) Handle(methodID uint32, handler Handler) *Peer {
+// As a special case, if method == "" the handler is called for any request
+// with a method name that does not have a more specific handler registered.
+// If len(method) > MaxMethodLen, Handle will panic.
+func (p *Peer) Handle(method string, handler Handler) *Peer {
+	if len(method) > MaxMethodLen {
+		panic(fmt.Sprintf("method %q name too long (%d bytes > %d)", method, len(method), MaxMethodLen))
+	}
 	p.μ.Lock()
 	defer p.μ.Unlock()
 	if p.imux == nil {
-		p.imux = make(map[uint32]Handler)
+		p.imux = make(map[string]Handler)
 	}
 	if handler == nil {
-		delete(p.imux, methodID)
+		delete(p.imux, method)
 	} else {
-		p.imux[methodID] = handler
+		p.imux[method] = handler
 	}
 	return p
 }
@@ -441,8 +448,9 @@ func (p *Peer) sendRsp(rsp *Response) {
 
 // sendReq sends a request packet for the given method and data.
 // It blocks until the send completes, but does not wait for the reply.
+// It returns the assigned request ID.
 // The response will be delivered on the returned pending channel.
-func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
+func (p *Peer) sendReq(method string, data []byte) (uint32, pending, error) {
 	// Phase 1: Check for fatal errors and acquire state.
 	p.μ.Lock()
 	if err := p.err; err != nil {
@@ -461,7 +469,7 @@ func (p *Peer) sendReq(method uint32, data []byte) (uint32, pending, error) {
 		Type: PacketRequest,
 		Payload: Request{
 			RequestID: id,
-			MethodID:  method,
+			Method:    method,
 			Data:      data,
 		}.Encode(),
 	})
@@ -508,9 +516,9 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		})
 	}
 
-	handler, ok := p.imux[req.MethodID]
+	handler, ok := p.imux[req.Method]
 	if !ok {
-		const wildcardID = 0
+		const wildcardID = ""
 		// Check whether a wildcard handler is registered.
 		if wc, ok := p.imux[wildcardID]; ok {
 			handler = wc

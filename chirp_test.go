@@ -18,6 +18,7 @@ import (
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/chirp/peers"
+	"github.com/creachadair/mds/mtest"
 	"github.com/creachadair/taskgroup"
 	"github.com/fortytw2/leaktest"
 	"github.com/google/go-cmp/cmp"
@@ -48,43 +49,43 @@ func TestPeer(t *testing.T) {
 
 	// The test cases send a string in the requeset that is parsed by
 	// parseTestSpec (see below) to control what the handler returns.
-	loc.A.Handle(100, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+	loc.A.Handle("100", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 		return parseTestSpec(ctx, string(req.Data))
 	})
 
 	tests := []struct {
-		who      *chirp.Peer     // peer originating the call
-		methodID uint32          // method ID to call
-		input    string          // input for parseTestSpec (generates response)
-		want     *chirp.Response // expected response
+		who        *chirp.Peer     // peer originating the call
+		methodName string          // method name to call
+		input      string          // input for parseTestSpec (generates response)
+		want       *chirp.Response // expected response
 	}{
-		{loc.B, 10, "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
-		{loc.A, 20, "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
-		{loc.A, 100, "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
+		{loc.B, "10", "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
+		{loc.A, "20", "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
+		{loc.A, "100", "n/a", &chirp.Response{Code: chirp.CodeUnknownMethod}},
 
-		{loc.B, 100, "ok", &chirp.Response{}},                        // success, empty data
-		{loc.B, 100, "ok yay", &chirp.Response{Data: []byte("yay")}}, // success, non-empty data
+		{loc.B, "100", "ok", &chirp.Response{}},                        // success, empty data
+		{loc.B, "100", "ok yay", &chirp.Response{Data: []byte("yay")}}, // success, non-empty data
 
-		{loc.B, 100, "error failure", &chirp.Response{
+		{loc.B, "100", "error failure", &chirp.Response{
 			Code: chirp.CodeServiceError,
 			Data: chirp.ErrorData{Message: "failure"}.Encode(),
 		}}, // service error, default handling
-		{loc.B, 100, "edata 17 hey stuff", &chirp.Response{
+		{loc.B, "100", "edata 17 hey stuff", &chirp.Response{
 			Code: chirp.CodeServiceError,
 			Data: chirp.ErrorData{Code: 17, Message: "hey", Data: []byte("stuff")}.Encode(),
 		}}, // service error, handler-provided code and data (by value)
-		{loc.B, 100, "*edata 101 goober nonsense", &chirp.Response{
+		{loc.B, "100", "*edata 101 goober nonsense", &chirp.Response{
 			Code: chirp.CodeServiceError,
 			Data: chirp.ErrorData{Code: 101, Message: "goober", Data: []byte("nonsense")}.Encode(),
 		}}, // service error, handler-provided code and data (pointer)
 
-		{loc.B, 100, "peer?", &chirp.Response{Data: []byte("present")}}, // check context peer
+		{loc.B, "100", "peer?", &chirp.Response{Data: []byte("present")}}, // check context peer
 	}
 	for _, test := range tests {
-		t.Run(fmt.Sprintf("method-%d-%s", test.methodID, test.input), func(t *testing.T) {
+		t.Run(fmt.Sprintf("method-%s-%s", test.methodName, test.input), func(t *testing.T) {
 			ctx := context.Background()
 
-			rsp, err := test.who.Call(ctx, test.methodID, []byte(test.input))
+			rsp, err := test.who.Call(ctx, test.methodName, []byte(test.input))
 			if err != nil {
 				ce, ok := err.(*chirp.CallError)
 				if !ok {
@@ -104,6 +105,35 @@ func TestPeer(t *testing.T) {
 	}
 }
 
+func TestMethodLen(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	tooLongName := strings.Repeat("m", chirp.MaxMethodLen+5)
+
+	t.Run("HandleTooLong", func(t *testing.T) {
+		got := mtest.MustPanic(t, func() { loc.A.Handle(tooLongName, nil) }).(string)
+		if !strings.Contains(got, "name too long") {
+			t.Errorf("Handle: got %q, want too long", got)
+		}
+	})
+
+	t.Run("CallTooLong", func(t *testing.T) {
+		var cerr *chirp.CallError
+		rsp, err := loc.A.Call(context.Background(), tooLongName, nil)
+		if rsp != nil {
+			t.Errorf("Call: unexpected response: %v", err)
+		}
+		if !errors.As(err, &cerr) {
+			t.Errorf("Call: unexpected error: got %v, want CallError", err)
+		} else if got := cerr.Err.Error(); !strings.Contains(got, "name too long") {
+			t.Errorf("Call: got %q, want too long", got)
+		}
+	})
+}
+
 func TestWildcard(t *testing.T) {
 	defer leaktest.Check(t)()
 
@@ -111,43 +141,43 @@ func TestWildcard(t *testing.T) {
 	defer loc.Stop()
 
 	ctx := context.Background()
-	call := func(mid uint32, want string, fail bool) {
+	call := func(mid, want string, fail bool) {
 		t.Helper()
 
 		rsp, err := loc.B.Call(ctx, mid, nil)
 		if err != nil {
 			if fail {
-				t.Logf("Call %d: got err=%v [OK]", mid, err)
+				t.Logf("Call %q: got err=%v [OK]", mid, err)
 			} else {
-				t.Errorf("Call %d: unexpected error: %v", mid, err)
+				t.Errorf("Call %q: unexpected error: %v", mid, err)
 			}
 			return
 		} else if fail {
-			t.Errorf("Call %d: should have failed", mid)
+			t.Errorf("Call %q: should have failed", mid)
 		}
 		if got := string(rsp.Data); got != want {
-			t.Errorf("Call %d: got %q, want %q", mid, got, want)
+			t.Errorf("Call %q: got %q, want %q", mid, got, want)
 		}
 	}
 
 	loc.A.
-		Handle(0, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		Handle("", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 			return []byte("wildcard"), nil
 		}).
-		Handle(1, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		Handle("1", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 			return []byte("designated"), nil
 		})
 
-	call(0, "wildcard", false)
-	call(1, "designated", false)
-	call(2, "wildcard", false)
+	call("", "wildcard", false)
+	call("1", "designated", false)
+	call("2", "wildcard", false)
 
 	// Unregister the wildcard handler and try again.
-	loc.A.Handle(0, nil)
+	loc.A.Handle("", nil)
 
-	call(0, "", true)
-	call(1, "designated", false)
-	call(2, "?", true)
+	call("", "", true)
+	call("1", "designated", false)
+	call("2", "?", true)
 }
 
 func TestCancellation(t *testing.T) {
@@ -170,7 +200,7 @@ func TestCancellation(t *testing.T) {
 			apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
 			wg.Done()
 		}
-	}).Handle(300, func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+	}).Handle("300", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
@@ -186,7 +216,7 @@ func TestCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	rsp, err := loc.B.Call(ctx, 300, nil)
+	rsp, err := loc.B.Call(ctx, "300", nil)
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("Got %+v, %v; want %v", rsp, err, context.Canceled)
 	}
@@ -196,7 +226,7 @@ func TestCancellation(t *testing.T) {
 	// B should have sent a Request followed by a Cancellation.
 	if diff := cmp.Diff([]packet{
 		// Request(1, 300, nil)
-		{T: chirp.PacketRequest, P: "\x00\x00\x00\x01\x00\x00\x01\x2c"},
+		{T: chirp.PacketRequest, P: "\x00\x00\x00\x01\x03300"},
 		// Cancel(1)
 		{T: chirp.PacketCancel, P: "\x00\x00\x00\x01"},
 	}, apkt); diff != "" {
@@ -220,42 +250,42 @@ func TestPeerExec(t *testing.T) {
 
 	loc.A.
 		LogPackets(logPacket(t, "Peer A")).
-		Handle(1, func(context.Context, *chirp.Request) ([]byte, error) {
+		Handle("1", func(context.Context, *chirp.Request) ([]byte, error) {
 			t.Log("handler: method 1")
 			return []byte("ok"), nil
 		}).
-		Handle(2, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		Handle("2", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 			t.Log("handler: method 2")
 			// Forward the request to method 1 handler, should succeed.
-			return chirp.ContextPeer(ctx).Exec(ctx, 1, req.Data)
+			return chirp.ContextPeer(ctx).Exec(ctx, "1", req.Data)
 		}).
-		Handle(3, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		Handle("3", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 			t.Log("handler: method 3")
 			// Forward the request to method 1000 handler, should fail.
 			// The data reported by this handler should not be seen by the caller.
-			_, err := chirp.ContextPeer(ctx).Exec(ctx, 1000, req.Data)
+			_, err := chirp.ContextPeer(ctx).Exec(ctx, "1000", req.Data)
 			return []byte("unseen"), err
 		}).
-		Handle(4, func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		Handle("4", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
 			t.Log("handler: method 4")
 			// Forward the request to method 2 handler, which should forward it to 1.
-			return chirp.ContextPeer(ctx).Exec(ctx, 2, req.Data)
+			return chirp.ContextPeer(ctx).Exec(ctx, "2", req.Data)
 		})
 
 	ctx := context.Background()
-	for _, mid := range []uint32{2, 4} {
-		t.Run(fmt.Sprintf("Call%d", mid), func(t *testing.T) {
+	for _, mid := range []string{"2", "4"} {
+		t.Run(fmt.Sprintf("Call%s", mid), func(t *testing.T) {
 			rsp, err := loc.B.Call(ctx, mid, nil)
 			if err != nil {
-				t.Errorf("Call %d: unexpected error: %v", mid, err)
+				t.Errorf("Call %q: unexpected error: %v", mid, err)
 			}
 			if got, want := string(rsp.Data), "ok"; got != want {
-				t.Errorf("Call %d: got %q, want %q", mid, got, want)
+				t.Errorf("Call %q: got %q, want %q", mid, got, want)
 			}
 		})
 	}
 	t.Run("Call3", func(t *testing.T) {
-		rsp, err := loc.B.Call(ctx, 3, nil)
+		rsp, err := loc.B.Call(ctx, "3", nil)
 		var cerr *chirp.CallError
 		if !errors.As(err, &cerr) {
 			t.Errorf("Call 3: got (%v, %v), want CallError", rsp, err)
@@ -277,12 +307,12 @@ func TestSlowCancellation(t *testing.T) {
 	stop := make(chan struct{})     // close to release the blocked 666 handler
 	returned := make(chan struct{}) // closed when the 666 handler returns
 	loc.A.
-		Handle(666, func(context.Context, *chirp.Request) ([]byte, error) {
+		Handle("666", func(context.Context, *chirp.Request) ([]byte, error) {
 			defer close(returned)
 			<-stop // block until released
 			return []byte("message in a bottle"), nil
 		}).
-		Handle(100, func(context.Context, *chirp.Request) ([]byte, error) {
+		Handle("100", func(context.Context, *chirp.Request) ([]byte, error) {
 			return []byte("ok"), nil
 		}).
 		LogPackets(logPacket(t, "Peer A"))
@@ -302,7 +332,7 @@ func TestSlowCancellation(t *testing.T) {
 	// if the remote peer has not acknowledged the cancellation yet.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	if rsp, err := loc.B.Call(ctx, 666, nil); err == nil {
+	if rsp, err := loc.B.Call(ctx, "666", nil); err == nil {
 		t.Errorf("Call: unexpectedly succeeded: %v", rsp)
 	} else {
 		t.Logf("Call correctly failed: %v", err)
@@ -310,7 +340,7 @@ func TestSlowCancellation(t *testing.T) {
 
 	// Verify that the peer did not yield the unresolved request ID, which would
 	// otherwise be reused.
-	if rsp, err := loc.B.Call(context.Background(), 100, nil); err != nil {
+	if rsp, err := loc.B.Call(context.Background(), "100", nil); err != nil {
 		t.Errorf("Call 100 unexpectedly failed: %v", err)
 	} else if got, want := string(rsp.Data), "ok"; got != want {
 		t.Errorf("Call 100: got %q, want %q", got, want)
@@ -391,12 +421,12 @@ func TestProtocolFatal(t *testing.T) {
 		pr, tw := io.Pipe()
 		tr, pw := io.Pipe()
 		ch := channel.IO(pr, pw)
-		p := chirp.NewPeer().Handle(22, stall).Start(ch)
+		p := chirp.NewPeer().Handle("22", stall).Start(ch)
 		defer p.Stop()
 
 		tw.Write(chirp.Packet{
 			Type:    chirp.PacketRequest,
-			Payload: chirp.Request{RequestID: 666, MethodID: 22}.Encode(),
+			Payload: chirp.Request{RequestID: 666, Method: "22"}.Encode(),
 		}.Encode())
 
 		// Wait for the method handler to be running.
@@ -557,7 +587,7 @@ func TestContextPlumbing(t *testing.T) {
 			// Attach a known value to the base context.
 			return context.WithValue(context.Background(), testKey{}, "ok")
 		}).
-		Handle(100, func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+		Handle("100", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
 			// Verify that the base context is visible from ctx.
 			v, ok := ctx.Value(testKey{}).(string)
 			if !ok || v != "ok" {
@@ -566,7 +596,7 @@ func TestContextPlumbing(t *testing.T) {
 			return nil, nil
 		})
 
-	_, err := loc.B.Call(context.Background(), 100, nil)
+	_, err := loc.B.Call(context.Background(), "100", nil)
 	if err != nil {
 		t.Fatalf("Call failed: %v", err)
 	}
@@ -592,7 +622,7 @@ func TestCallback(t *testing.T) {
 		}
 
 		t.Logf("Peer %p callback v=%d", peer, v)
-		rsp, err := peer.Call(ctx, req.MethodID, []byte(strconv.Itoa(v+1)))
+		rsp, err := peer.Call(ctx, req.Method, []byte(strconv.Itoa(v+1)))
 		if err != nil {
 			return nil, err
 		}
@@ -602,10 +632,10 @@ func TestCallback(t *testing.T) {
 	// Each peer will ping-pong callbacks until the threshold has been reached,
 	// then unwind returning the result from the furthest call all the way back
 	// to the initial caller.
-	loc.A.Handle(100, caller).LogPackets(logPacket(t, "Peer A"))
-	loc.B.Handle(100, caller).LogPackets(logPacket(t, "Peer B"))
+	loc.A.Handle("100", caller).LogPackets(logPacket(t, "Peer A"))
+	loc.B.Handle("100", caller).LogPackets(logPacket(t, "Peer B"))
 
-	rsp, err := loc.A.Call(context.Background(), 100, []byte("0"))
+	rsp, err := loc.A.Call(context.Background(), "100", []byte("0"))
 	if err != nil {
 		t.Fatalf("Call failed: %v", err)
 	} else if got, want := string(rsp.Data), "ok"; got != want {
@@ -622,8 +652,8 @@ func TestConcurrency(t *testing.T) {
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
-		loc.A.Handle(100, slowEcho)
-		loc.B.Handle(200, slowEcho)
+		loc.A.Handle("100", slowEcho)
+		loc.B.Handle("200", slowEcho)
 
 		runConcurrent(t, loc.A, loc.B)
 	})
@@ -644,8 +674,8 @@ func TestConcurrency(t *testing.T) {
 			}
 		}()
 
-		pa.Handle(100, slowEcho)
-		pb.Handle(200, slowEcho)
+		pa.Handle("100", slowEcho)
+		pb.Handle("200", slowEcho)
 
 		runConcurrent(t, pa, pb)
 	})
@@ -667,7 +697,7 @@ func runConcurrent(t *testing.T, pa, pb *chirp.Peer) {
 		// Send calls from A to B.
 		ab := fmt.Sprintf("ab-call-%d", i+1)
 		calls.Go(func() error {
-			rsp, err := pa.Call(ctx, 200, []byte(ab))
+			rsp, err := pa.Call(ctx, "200", []byte(ab))
 			if err != nil {
 				return err
 			} else if got := string(rsp.Data); got != ab {
@@ -679,7 +709,7 @@ func runConcurrent(t *testing.T, pa, pb *chirp.Peer) {
 		// Send calls from B to A.
 		ba := fmt.Sprintf("ba-call-%d", i+1)
 		calls.Go(func() error {
-			rsp, err := pb.Call(ctx, 100, []byte(ba))
+			rsp, err := pb.Call(ctx, "100", []byte(ba))
 			if err != nil {
 				return err
 			} else if got := string(rsp.Data); got != ba {
