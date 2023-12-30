@@ -309,11 +309,11 @@ func (p *Peer) Exec(ctx context.Context, methodName string, data []byte) ([]byte
 
 // Handle registers a handler for the specified method name. It is safe to call
 // this while the peer is running. Passing a nil Handler removes any handler
-// for the specified ID. Handle returns p to permit chaining.
+// for the specified method. Handle returns p to permit chaining.
 //
-// As a special case, if methodName == "" the handler is called for any request
+// As a special case, if method == "" the handler is called for any request
 // with a method name that does not have a more specific handler registered.
-// If len(methodName) > MaxMethodLen, Handle will panic.
+// If len(method) > MaxMethodLen, Handle will panic.
 func (p *Peer) Handle(method string, handler Handler) *Peer {
 	if len(method) > MaxMethodLen {
 		panic(fmt.Sprintf("method %q name too long (%d bytes > %d)", method, len(method), MaxMethodLen))

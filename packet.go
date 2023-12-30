@@ -116,7 +116,7 @@ func (p PacketType) String() string {
 // Request is the payload format for a Chirp v0 request packet.
 type Request struct {
 	RequestID  uint32
-	MethodName string
+	MethodName string // at most MaxMethodLen bytes
 	Data       []byte
 }
 
