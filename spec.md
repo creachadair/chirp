@@ -132,7 +132,7 @@ The payload of a Cancel packet has the following structure:
 
 ## Protocol Definition
 
-The current protocol is Version 1, indicated by the packet header `CP\x00`.
+The current protocol is Version 0, indicated by the packet header `CP\x00`.
 
 An implementation of the protocol consists of two components:
 
