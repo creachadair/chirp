@@ -105,7 +105,7 @@ func TestPeer(t *testing.T) {
 	}
 }
 
-func TestMethodNameLen(t *testing.T) {
+func TestMethodLen(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	loc := peers.NewLocal()
@@ -426,7 +426,7 @@ func TestProtocolFatal(t *testing.T) {
 
 		tw.Write(chirp.Packet{
 			Type:    chirp.PacketRequest,
-			Payload: chirp.Request{RequestID: 666, MethodName: "22"}.Encode(),
+			Payload: chirp.Request{RequestID: 666, Method: "22"}.Encode(),
 		}.Encode())
 
 		// Wait for the method handler to be running.
@@ -622,7 +622,7 @@ func TestCallback(t *testing.T) {
 		}
 
 		t.Logf("Peer %p callback v=%d", peer, v)
-		rsp, err := peer.Call(ctx, req.MethodName, []byte(strconv.Itoa(v+1)))
+		rsp, err := peer.Call(ctx, req.Method, []byte(strconv.Itoa(v+1)))
 		if err != nil {
 			return nil, err
 		}

@@ -115,9 +115,9 @@ func (p PacketType) String() string {
 
 // Request is the payload format for a Chirp v0 request packet.
 type Request struct {
-	RequestID  uint32
-	MethodName string // at most MaxMethodLen bytes
-	Data       []byte
+	RequestID uint32
+	Method    string // at most MaxMethodLen bytes
+	Data      []byte
 }
 
 // MaxMethodLen is the maximum permitted length for a method name.
@@ -125,14 +125,14 @@ const MaxMethodLen = 255
 
 // Encode encodes the request data in binary format.
 func (r Request) Encode() []byte {
-	mlen := len(r.MethodName)
+	mlen := len(r.Method)
 	if mlen > 255 {
 		panic(fmt.Sprintf("method name is %d (>255) bytes", mlen))
 	}
 	buf := make([]byte, 4+1+mlen+len(r.Data)) // 4 request ID, 1 method name length
 	binary.BigEndian.PutUint32(buf[0:], r.RequestID)
 	buf[4] = byte(mlen)
-	copy(buf[5:], r.MethodName)
+	copy(buf[5:], r.Method)
 	copy(buf[5+mlen:], r.Data)
 	return buf
 }
@@ -147,7 +147,7 @@ func (r *Request) Decode(data []byte) error {
 	if 5+mlen > len(data) {
 		return fmt.Errorf("short method name (%d > %d bytes)", 5+mlen, len(data))
 	}
-	r.MethodName = string(data[5 : 5+mlen])
+	r.Method = string(data[5 : 5+mlen])
 	if len(data[5+mlen:]) > 0 {
 		r.Data = data[5+mlen:]
 	} else {
@@ -158,7 +158,7 @@ func (r *Request) Decode(data []byte) error {
 
 // String returns a human-friendly rendering of the request.
 func (r Request) String() string {
-	return fmt.Sprintf("Request(ID=%v, Method=%q, %s)", r.RequestID, r.MethodName, trimData(r.Data))
+	return fmt.Sprintf("Request(ID=%v, Method=%q, %s)", r.RequestID, r.Method, trimData(r.Data))
 }
 
 // Response is the payload format for a Chirp v0 response packet.

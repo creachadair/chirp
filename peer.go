@@ -293,18 +293,18 @@ type errUnknownMethod struct{}
 func (errUnknownMethod) Error() string          { return "exec: unknown method" }
 func (errUnknownMethod) ResultCode() ResultCode { return CodeUnknownMethod }
 
-// Exec executes the (local) handler on p for the methodName, if one exists.
-// If no handler is defined for methodName, Exec reports an internal error with
-// an empty result; otherwise it returns the result of calling the handler with
+// Exec executes the (local) handler on p for the method, if one exists.
+// If no handler is defined for method, Exec reports an internal error with an
+// empty result; otherwise it returns the result of calling the handler with
 // the given data.
-func (p *Peer) Exec(ctx context.Context, methodName string, data []byte) ([]byte, error) {
+func (p *Peer) Exec(ctx context.Context, method string, data []byte) ([]byte, error) {
 	p.μ.Lock()
-	handler, ok := p.imux[methodName]
+	handler, ok := p.imux[method]
 	p.μ.Unlock()
 	if !ok {
 		return nil, errUnknownMethod{}
 	}
-	return handler(ctx, &Request{MethodName: methodName, Data: data})
+	return handler(ctx, &Request{Method: method, Data: data})
 }
 
 // Handle registers a handler for the specified method name. It is safe to call
@@ -468,9 +468,9 @@ func (p *Peer) sendReq(method string, data []byte) (uint32, pending, error) {
 	err := p.sendOut(&Packet{
 		Type: PacketRequest,
 		Payload: Request{
-			RequestID:  id,
-			MethodName: method,
-			Data:       data,
+			RequestID: id,
+			Method:    method,
+			Data:      data,
 		}.Encode(),
 	})
 
@@ -516,7 +516,7 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		})
 	}
 
-	handler, ok := p.imux[req.MethodName]
+	handler, ok := p.imux[req.Method]
 	if !ok {
 		const wildcardID = ""
 		// Check whether a wildcard handler is registered.
