@@ -53,16 +53,26 @@
 //	   return req.Data, nil
 //	}
 //
-//	p.Handle(100, echo)
+//	p.Handle("do-a-thing", echo)
 //
 // To issue a call to the remote peer, use the Call method:
 //
-//	rsp, err := p.Call(ctx, 100, []byte("some data"))
+//	rsp, err := p.Call(ctx, "do-a-thing", []byte("some data"))
 //	if err != nil {
 //	   log.Fatalf("Call failed: %v", err)
 //	}
 //
 // Errors returned by p.Call have concrete type *chirp.CallError.
+//
+// To call a method directly on the local peer, use the Exec method:
+//
+//	rsp, err := p.Exec(ctx, "do-a-thing", []byte("some data"))
+//	if err != nil {
+//	   log.Fatalf("Exec failed: %v", err)
+//	}
+//
+// Exec does not send any packets to the remote peer unless the method handler
+// does so internally.
 //
 // # Custom Packet Handlers
 //
