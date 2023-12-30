@@ -124,6 +124,7 @@ type Request struct {
 const MaxMethodLen = 255
 
 // Encode encodes the request data in binary format.
+// This method will panic if r.Method is longer than MaxMethodLen.
 func (r Request) Encode() []byte {
 	mlen := len(r.Method)
 	if mlen > 255 {
