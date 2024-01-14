@@ -106,3 +106,23 @@ func (n netAccepter) Accept(ctx context.Context) (chirp.Channel, error) {
 	}
 	return channel.IO(conn, conn), nil
 }
+
+// HandlerMap is a map from method names to handlers. It is a convenience type
+// for registering a collection of methods consistently on peers.
+//
+// If the value associated with a name in the map is nil, applying the map to a
+// peer has the effect of unregistering that method name.
+type HandlerMap map[string]chirp.Handler
+
+// Register registers the handlers in h with the specified peer p.  It returns
+// p to permit chaining.
+func (h HandlerMap) Register(p *chirp.Peer) *chirp.Peer { return h.RegisterWithPrefix(p, "") }
+
+// RegisterWithPrefix registers the handlers in h with the specified peer p,
+// with each handler name prepended by prefix. It returns p to permit chaining.
+func (h HandlerMap) RegisterWithPrefix(p *chirp.Peer, prefix string) *chirp.Peer {
+	for name, handler := range h {
+		p.Handle(prefix+name, handler)
+	}
+	return p
+}
