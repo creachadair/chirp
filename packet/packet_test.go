@@ -46,16 +46,16 @@ func TestVint30(t *testing.T) {
 		packed = tc.input.Append(packed) // see below
 
 		// Make sure the value round-trips individually.
-		nb, cmp := packet.DecodeVint30(got)
+		nb, cmp := packet.ParseVint30(got)
 		if nb != len(tc.want) || cmp != tc.input {
-			t.Errorf("Decode: got value %d (%d bytes), want %d (%d bytes)", cmp, nb, tc.input, len(tc.want))
+			t.Errorf("Parse: got value %d (%d bytes), want %d (%d bytes)", cmp, nb, tc.input, len(tc.want))
 		}
 	}
 
 	// Now decode the accumulated results to verify self-framing.
 	t.Logf("Packed: %v", packed)
 	for i := 0; len(packed) != 0; i++ {
-		nb, got := packet.DecodeVint30(packed)
+		nb, got := packet.ParseVint30(packed)
 		if nb < 0 {
 			t.Fatalf("Invalid encoding at %v", packed)
 		} else if i > len(tests) {
@@ -95,9 +95,9 @@ func TestBytes(t *testing.T) {
 
 	var all []byte
 	for _, tc := range tests {
-		nb, got := packet.DecodeBytes([]byte(tc.input))
+		nb, got := packet.ParseBytes([]byte(tc.input))
 		if nb != tc.nb || string(got) != tc.want {
-			t.Errorf("Decode %q: got (%q, %d), want (%q, %d)", tc.input, got, nb, tc.want, tc.nb)
+			t.Errorf("Parse %q: got (%q, %d), want (%q, %d)", tc.input, got, nb, tc.want, tc.nb)
 		} else if nb < 0 {
 			continue
 		}
@@ -119,7 +119,7 @@ func TestBytes(t *testing.T) {
 			continue // skip, we didn't add anything for this case
 		}
 
-		nb, got := packet.DecodeBytes(all)
+		nb, got := packet.ParseBytes(all)
 		if nb < 0 {
 			t.Fatalf("Index %d: decode failed", i)
 		} else if string(got) != tests[i].want {
@@ -146,29 +146,29 @@ func TestSlice(t *testing.T) {
 	enc := s.Encode()
 	t.Logf("Encoding: %#q", enc)
 
-	if nb, got := packet.DecodeLiteral("OK", enc); nb < 0 {
-		t.Fatal("DecodeString: not found")
+	if nb, got := packet.ParseLiteral("OK", enc); nb < 0 {
+		t.Fatal("ParseLiteral: not found")
 	} else if string(got) != "OK" {
-		t.Errorf("DecodeString: got %q, want OK", got)
+		t.Errorf("ParseLiteral: got %q, want OK", got)
 	} else {
 		enc = enc[nb:]
 	}
-	if nb, got := packet.DecodeBytes(enc); nb < 0 {
-		t.Fatal("DecodeBytes: not found")
+	if nb, got := packet.ParseBytes(enc); nb < 0 {
+		t.Fatal("ParseBytes: not found")
 	} else if string(got) != text {
-		t.Errorf("DecodeBytes: got %q, want %q", got, text)
+		t.Errorf("ParseBytes: got %q, want %q", got, text)
 	} else {
 		enc = enc[nb:]
 	}
-	nb, nelt := packet.DecodeVint30(enc)
+	nb, nelt := packet.ParseVint30(enc)
 	if nb < 0 {
-		t.Fatal("DecodeVint30: not found")
+		t.Fatal("ParseVint30: not found")
 	}
 	enc = enc[nb:]
 
 	var vals packet.Slice
 	for nelt > 0 {
-		nb, elt := packet.DecodeVint30(enc)
+		nb, elt := packet.ParseVint30(enc)
 		if nb < 0 {
 			t.Fatalf("Element %d: not found", nelt)
 		}
@@ -181,5 +181,33 @@ func TestSlice(t *testing.T) {
 	}
 	if len(enc) != 0 {
 		t.Errorf("At EOF, encoding has leftover data: %v", enc)
+	}
+}
+
+func TestParse(t *testing.T) {
+	want := packet.Slice{
+		packet.Bytes("fee fi fo fum"),
+		packet.Vint30(12345),
+		packet.String("OK"),
+		packet.Vint30(67890),
+	}
+
+	enc := want.Encode()
+	t.Logf("Encoding: %#q", enc)
+
+	var b packet.Bytes
+	var v1, v2 packet.Vint30
+	nr, err := packet.Parse(enc, &b, &v1, packet.String("OK"), &v2)
+	if err != nil {
+		t.Fatalf("Parse: unexpected error: %v", err)
+	}
+
+	// The parse should have consumed the whole input.
+	if nr != len(enc) {
+		t.Errorf("Parse: used %d bytes, want %d", nr, len(enc))
+	}
+
+	if diff := cmp.Diff(packet.Slice{b, v1, packet.String("OK"), v2}, want); diff != "" {
+		t.Errorf("Parse (-got, +want):\n%s", diff)
 	}
 }

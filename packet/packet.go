@@ -66,10 +66,10 @@ func (v Vint30) Append(buf []byte) []byte {
 	return append(buf, tmp[:s]...)
 }
 
-// DecodeVint30 decodes a prefix of buf as a Vint30, and reports the number of
+// ParseVint30 decodes a prefix of buf as a Vint30, and reports the number of
 // bytes consumed by the encoding. If buf does not begin with a valid encoding,
 // it returns -1, 0.
-func DecodeVint30(buf []byte) (int, Vint30) {
+func ParseVint30(buf []byte) (int, Vint30) {
 	if len(buf) == 0 {
 		return -1, 0 // no valid encoding
 	}
@@ -108,14 +108,14 @@ func (b Bytes) Append(buf []byte) []byte {
 	return append(out, b...)
 }
 
-// DecodeBytes decodes a length-prefixed sliced of bytes from the front of buf
+// ParseBytes decodes a length-prefixed sliced of bytes from the front of buf
 // and reports the number of bytes consumed by the encoding. If buf does not
 // begin with a valud encoding, it returns -1, nil.
 //
-// A successful DecodeBytes returns a slice that aliases input array.  The
+// A successful ParseBytes returns a slice that aliases input array.  The
 // caller must copy the bytes if the underlying data are expected to change.
-func DecodeBytes(buf []byte) (int, []byte) {
-	nb, blen := DecodeVint30(buf)
+func ParseBytes(buf []byte) (int, []byte) {
+	nb, blen := ParseVint30(buf)
 	if nb < 0 {
 		return -1, nil // invalid length prefix
 	}
@@ -152,19 +152,19 @@ type Encoder interface {
 	Append([]byte) []byte
 }
 
-// DecodePrefix decodes a slice of n bytes from the front of buf, and reports
+// ParsePrefix decodes a slice of n bytes from the front of buf, and reports
 // the number of bytes consumed. If len(buf) < n, it returns -1, nil.
-func DecodePrefix(n int, buf []byte) (int, []byte) {
+func ParsePrefix(n int, buf []byte) (int, []byte) {
 	if len(buf) < n {
 		return -1, nil
 	}
 	return n, buf[:n]
 }
 
-// DecodeLiteral decodes the specified string from the front of buf, and
-// reports the number of bytes consumed. If len(buf) < len(s) or the prefix is
-// not equal to s, it returns -1, nil.
-func DecodeLiteral(s string, buf []byte) (int, []byte) {
+// ParseLiteral decodes the specified string from the front of buf, and reports
+// the number of bytes consumed. If len(buf) < len(s) or the prefix is not
+// equal to s, it returns -1, nil.
+func ParseLiteral(s string, buf []byte) (int, []byte) {
 	if len(buf) < len(s) || string(buf[:len(s)]) != s {
 		return -1, nil
 	}
