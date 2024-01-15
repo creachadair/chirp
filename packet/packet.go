@@ -1,7 +1,7 @@
 // Package packet provides support for encoding and decoding binary packet data.
 package packet
 
-// Vint30 is an unsigned 30-byte integer that uses a variable-width encoding
+// Vint30 is an unsigned 30-bit integer that uses a variable-width encoding
 // from 1 to 4 bytes.
 //
 //   - Values v < 64 are encoded as 1 byte.
