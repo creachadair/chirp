@@ -1,3 +1,5 @@
+// Copyright (C) 2024 Michael J. Fromberger. All Rights Reserved.
+
 // Package packet provides support for encoding and decoding binary packet data.
 package packet
 

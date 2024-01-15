@@ -1,3 +1,5 @@
+// Copyright (C) 2024 Michael J. Fromberger. All Rights Reserved.
+
 package packet_test
 
 import (
