@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/creachadair/chirp/packet"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestVint30(t *testing.T) {
@@ -123,5 +124,60 @@ func TestBytes(t *testing.T) {
 			t.Errorf("Index %d: got %q, want %q", i, got, tests[i].want)
 		}
 		all = all[nb:]
+	}
+}
+
+func TestSlice(t *testing.T) {
+	const text = "go away or I shall taunt you a second time"
+	vs := packet.Slice{
+		packet.Vint30(1000),
+		packet.Vint30(8000),
+		packet.Vint30(98765432),
+		packet.Vint30(14),
+	}
+	s := packet.Slice{
+		packet.String("OK"),
+		packet.Bytes([]byte(text)),
+		packet.Vint30(len(vs)),
+		vs,
+	}
+	enc := s.Encode()
+	t.Logf("Encoding: %#q", enc)
+
+	if nb, got := packet.DecodeLiteral("OK", enc); nb < 0 {
+		t.Fatal("DecodeString: not found")
+	} else if string(got) != "OK" {
+		t.Errorf("DecodeString: got %q, want OK", got)
+	} else {
+		enc = enc[nb:]
+	}
+	if nb, got := packet.DecodeBytes(enc); nb < 0 {
+		t.Fatal("DecodeBytes: not found")
+	} else if string(got) != text {
+		t.Errorf("DecodeBytes: got %q, want %q", got, text)
+	} else {
+		enc = enc[nb:]
+	}
+	nb, nelt := packet.DecodeVint30(enc)
+	if nb < 0 {
+		t.Fatal("DecodeVint30: not found")
+	}
+	enc = enc[nb:]
+
+	var vals packet.Slice
+	for nelt > 0 {
+		nb, elt := packet.DecodeVint30(enc)
+		if nb < 0 {
+			t.Fatalf("Element %d: not found", nelt)
+		}
+		vals = append(vals, elt)
+		enc = enc[nb:]
+		nelt--
+	}
+	if diff := cmp.Diff(vals, vs); diff != "" {
+		t.Errorf("Values (-got, +want):\n%s", diff)
+	}
+	if len(enc) != 0 {
+		t.Errorf("At EOF, encoding has leftover data: %v", enc)
 	}
 }

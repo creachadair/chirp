@@ -123,3 +123,88 @@ func DecodeBytes(buf []byte) (int, []byte) {
 	}
 	return end, buf[nb:end]
 }
+
+// String is a string that encodes as the literal sequence of bytes comprising
+// the string without padding or framing.
+type String string
+
+// EncodedLen reports the nuymber of bytes needed to encode s, which is equal
+// to the length of s in bytes.
+func (s String) EncodedLen() int { return len(s) }
+
+// Encode returns the encoded form of s. This is shorthand for s.Append(nil).
+func (s String) Encode() []byte { return s.Append(nil) }
+
+// Append appends the encoded value of s to buf and returns the updated slice.
+func (s String) Append(buf []byte) []byte { return append(buf, s...) }
+
+// An Encoder is a value that supports being encoded into binary form.
+type Encoder interface {
+	// EncodedLen reports the number of bytes needed to encode its receiver.
+	// If the value cannot be encoded, EncodedLen must return -1.
+	EncodedLen() int
+
+	// Append appends the encoded representation of the receiver to buf, and
+	// returns the updated slice. If the value cannot be encoded, Append must
+	// panic.
+	Append([]byte) []byte
+}
+
+// DecodePrefix decodes a slice of n bytes from the front of buf, and reports
+// the number of bytes consumed. If len(buf) < n, it returns -1, nil.
+func DecodePrefix(n int, buf []byte) (int, []byte) {
+	if len(buf) < n {
+		return -1, nil
+	}
+	return n, buf[:n]
+}
+
+// DecodeLiteral decodes the specified string from the front of buf, and
+// reports the number of bytes consumed. If len(buf) < len(s) or the prefix is
+// not equal to s, it returns -1, nil.
+func DecodeLiteral(s string, buf []byte) (int, []byte) {
+	if len(buf) < len(s) || string(buf[:len(s)]) != s {
+		return -1, nil
+	}
+	return len(s), buf[:len(s)]
+}
+
+// A Slice is a sequence of Encoders that itself implements the Encoder interface.
+type Slice []Encoder
+
+// EncodedLen implements the corresponding method of the Encoder interface.
+// It reports the total length required to encode the elements of s, of -1 if
+// any of the values cannot be encoded.
+func (s Slice) EncodedLen() int {
+	var sum int
+	for _, v := range s {
+		n := v.EncodedLen()
+		if n < 0 {
+			return -1
+		}
+		sum += n
+	}
+	return sum
+}
+
+// Encode returns the concatenation of the encoded forms of s, in order.
+// It panics if any element of s cannot be encoded.
+// It returns nil if len(s) == 0.
+// This is shorthand for s.Append(nil).
+func (s Slice) Encode() []byte {
+	if len(s) == 0 {
+		return nil
+	}
+	buf := make([]byte, 0, s.EncodedLen())
+	return s.Append(buf)
+}
+
+// Append implements the corresponding method of the Encoder interface.
+// It panics if any element of s cannot be encoded.
+// It returns buf unmodified if len(s) == 0.
+func (s Slice) Append(buf []byte) []byte {
+	for _, v := range s {
+		buf = v.Append(buf)
+	}
+	return buf
+}
