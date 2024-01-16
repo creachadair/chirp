@@ -46,13 +46,9 @@ func (v Vint30) EncodedLen() int {
 	}
 }
 
-// Encode returns the encoded form of v. It panics if v is out of range.
-// This is a shorthand for v.Append(nil).
-func (v Vint30) Encode() []byte { return v.Append(nil) }
-
-// Append appends the encoded value of v to buf, and returns the updated slice.
+// Encode appends the encoded value of v to buf, and returns the updated slice.
 // It panics if v is out of range.
-func (v Vint30) Append(buf []byte) []byte {
+func (v Vint30) Encode(buf []byte) []byte {
 	s := v.EncodedLen()
 	if s < 0 {
 		panic("value out of range")
@@ -97,14 +93,10 @@ func (b Bytes) EncodedLen() int {
 	return Vint30(len(b)).EncodedLen() + len(b)
 }
 
-// Encode returns the encoded form of b. It panics if b is too long to be
-// encoded. This is a shorthand for b.Append(nil).
-func (b Bytes) Encode() []byte { return b.Append(nil) }
-
-// Append appends the encoding of b to buf, and returns the updated slice.
+// Encode appends the encoding of b to buf, and returns the updated slice.
 // It panics if b is too long to be encoded.
-func (b Bytes) Append(buf []byte) []byte {
-	out := Vint30(len(b)).Append(buf)
+func (b Bytes) Encode(buf []byte) []byte {
+	out := Vint30(len(b)).Encode(buf)
 	return append(out, b...)
 }
 
@@ -134,11 +126,8 @@ type String string
 // to the length of s in bytes.
 func (s String) EncodedLen() int { return len(s) }
 
-// Encode returns the encoded form of s. This is shorthand for s.Append(nil).
-func (s String) Encode() []byte { return s.Append(nil) }
-
-// Append appends the encoded value of s to buf and returns the updated slice.
-func (s String) Append(buf []byte) []byte { return append(buf, s...) }
+// Encode appends the encoded value of s to buf and returns the updated slice.
+func (s String) Encode(buf []byte) []byte { return append(buf, s...) }
 
 // An Encoder is a value that supports being encoded into binary form.
 type Encoder interface {
@@ -146,10 +135,10 @@ type Encoder interface {
 	// If the value cannot be encoded, EncodedLen must return -1.
 	EncodedLen() int
 
-	// Append appends the encoded representation of the receiver to buf, and
-	// returns the updated slice. If the value cannot be encoded, Append must
+	// Encode appends the encoded representation of the receiver to buf, and
+	// returns the updated slice. If the value cannot be encoded, Encode must
 	// panic.
-	Append([]byte) []byte
+	Encode([]byte) []byte
 }
 
 // ParsePrefix decodes a slice of n bytes from the front of buf, and reports
@@ -189,24 +178,12 @@ func (s Slice) EncodedLen() int {
 	return sum
 }
 
-// Encode returns the concatenation of the encoded forms of s, in order.
-// It panics if any element of s cannot be encoded.
-// It returns nil if len(s) == 0.
-// This is shorthand for s.Append(nil).
-func (s Slice) Encode() []byte {
-	if len(s) == 0 {
-		return nil
-	}
-	buf := make([]byte, 0, s.EncodedLen())
-	return s.Append(buf)
-}
-
-// Append implements the corresponding method of the Encoder interface.
+// Encode implements the corresponding method of the Encoder interface.
 // It panics if any element of s cannot be encoded.
 // It returns buf unmodified if len(s) == 0.
-func (s Slice) Append(buf []byte) []byte {
+func (s Slice) Encode(buf []byte) []byte {
 	for _, v := range s {
-		buf = v.Append(buf)
+		buf = v.Encode(buf)
 	}
 	return buf
 }

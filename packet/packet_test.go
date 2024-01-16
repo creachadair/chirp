@@ -39,11 +39,11 @@ func TestVint30(t *testing.T) {
 
 	var packed []byte
 	for _, tc := range tests {
-		got := tc.input.Encode()
+		got := tc.input.Encode(nil)
 		if string(got) != tc.want {
 			t.Errorf("Encode %d: got %v, want %v", tc.input, got, []byte(tc.want))
 		}
-		packed = tc.input.Append(packed) // see below
+		packed = tc.input.Encode(packed) // see below
 
 		// Make sure the value round-trips individually.
 		nb, cmp := packet.ParseVint30(got)
@@ -105,7 +105,7 @@ func TestBytes(t *testing.T) {
 		all = append(all, tc.input...) // see below
 
 		// If the result was valid, make sure it round-trips correctly.
-		cmp := packet.Bytes(got).Encode()
+		cmp := packet.Bytes(got).Encode(nil)
 		if string(cmp) != tc.input {
 			t.Errorf("Encode %v: got %v, want %v", got, cmp, []byte(tc.input))
 		}
@@ -143,7 +143,7 @@ func TestSlice(t *testing.T) {
 		packet.Vint30(len(vs)),
 		vs,
 	}
-	enc := s.Encode()
+	enc := s.Encode(nil)
 	t.Logf("Encoding: %#q", enc)
 
 	if nb, got := packet.ParseLiteral("OK", enc); nb < 0 {
@@ -192,7 +192,7 @@ func TestParse(t *testing.T) {
 		packet.Vint30(67890),
 	}
 
-	enc := want.Encode()
+	enc := want.Encode(nil)
 	t.Logf("Encoding: %#q", enc)
 
 	var b packet.Bytes
