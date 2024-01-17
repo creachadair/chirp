@@ -197,7 +197,9 @@ type Encoder interface {
 	Encode([]byte) []byte
 }
 
-// A Slice is a sequence of Encoders that itself implements the Encoder interface.
+// A Slice is a sequence of Encoders that itself implements the Encoder
+// interface.  It encodes as the concatenation of the encodings of its
+// elements.
 type Slice []Encoder
 
 // EncodedLen implements the corresponding method of the Encoder interface.
