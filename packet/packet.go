@@ -178,7 +178,7 @@ func (r Raw) Encode(buf []byte) []byte { return append(buf, r...) }
 
 // ParseRaw decodes a slice of n bytes from the front of buf, and reports the
 // number of bytes consumed. If len(buf) < n, it returns -1, nil.
-func ParseRaw(n int, buf []byte) (int, []byte) {
+func ParseRaw(n int, buf []byte) (int, Raw) {
 	if len(buf) < n {
 		return -1, nil
 	}
