@@ -140,6 +140,7 @@ func TestSlice(t *testing.T) {
 	s := packet.Slice{
 		packet.String("OK"),
 		packet.Bytes([]byte(text)),
+		packet.Bool(true),
 		packet.Vint30(len(vs)),
 		vs,
 	}
@@ -157,6 +158,13 @@ func TestSlice(t *testing.T) {
 		t.Fatal("ParseBytes: not found")
 	} else if string(got) != text {
 		t.Errorf("ParseBytes: got %q, want %q", got, text)
+	} else {
+		enc = enc[nb:]
+	}
+	if nb, got := packet.ParseBool(enc); nb < 0 {
+		t.Fatal("ParseBool: not found")
+	} else if got != true {
+		t.Errorf("ParseBool: got %v, want true", got)
 	} else {
 		enc = enc[nb:]
 	}

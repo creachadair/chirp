@@ -38,6 +38,16 @@ func (s String) Decode(buf []byte) int {
 	return nb
 }
 
+// Decode implements the Decoder interface.
+func (b *Bool) Decode(buf []byte) int {
+	nb, v := ParseBool(buf)
+	if nb < 0 {
+		return -1
+	}
+	*b = v
+	return nb
+}
+
 // Parse parses buf into the specified decoder values, returning the total
 // number of bytes consumed.
 func Parse(buf []byte, into ...Decoder) (int, error) {

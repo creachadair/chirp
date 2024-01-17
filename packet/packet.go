@@ -122,12 +122,40 @@ func ParseBytes(buf []byte) (int, []byte) {
 // the string without padding or framing.
 type String string
 
-// EncodedLen reports the nuymber of bytes needed to encode s, which is equal
+// EncodedLen reports the number of bytes needed to encode s, which is equal
 // to the length of s in bytes.
 func (s String) EncodedLen() int { return len(s) }
 
 // Encode appends the encoded value of s to buf and returns the updated slice.
 func (s String) Encode(buf []byte) []byte { return append(buf, s...) }
+
+// Bool is a bool that encodes as a single byte with value 0 or 1.
+type Bool bool
+
+// EncodedLen reports the number of bytes needed to encode b, which is 1.
+func (Bool) EncodedLen() int { return 1 }
+
+// Encode appends the encoded value of b to buf and returns the updated slice.
+func (b Bool) Encode(buf []byte) []byte {
+	if b {
+		return append(buf, 1)
+	}
+	return append(buf, 0)
+}
+
+// ParseBool decodes a single byte from the front of buf as a Bool, and reports
+// the number of bytes consumed (1), or -1 if buf is empty. A 0 means false and
+// any non-zero value means true.
+func ParseBool(buf []byte) (int, Bool) {
+	switch {
+	case len(buf) == 0:
+		return -1, false
+	case buf[0] == 0:
+		return 1, false
+	default:
+		return 1, true
+	}
+}
 
 // An Encoder is a value that supports being encoded into binary form.
 type Encoder interface {
