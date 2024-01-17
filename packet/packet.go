@@ -106,7 +106,7 @@ func (b Bytes) Encode(buf []byte) []byte {
 //
 // A successful ParseBytes returns a slice that aliases input array.  The
 // caller must copy the bytes if the underlying data are expected to change.
-func ParseBytes(buf []byte) (int, []byte) {
+func ParseBytes(buf []byte) (int, Bytes) {
 	nb, blen := ParseVint30(buf)
 	if nb < 0 {
 		return -1, nil // invalid length prefix
