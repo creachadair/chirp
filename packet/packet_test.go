@@ -14,14 +14,14 @@ import (
 var (
 	_ packet.Encoder = packet.Vint30(0)
 	_ packet.Encoder = packet.Bytes(nil)
-	_ packet.Encoder = packet.String("")
+	_ packet.Encoder = packet.Literal("")
 	_ packet.Encoder = packet.Bool(false)
 	_ packet.Encoder = packet.Raw(nil)
 	_ packet.Encoder = packet.Slice(nil)
 
 	_ packet.Decoder = (*packet.Vint30)(nil)
 	_ packet.Decoder = (*packet.Bytes)(nil)
-	_ packet.Decoder = packet.String("")
+	_ packet.Decoder = packet.Literal("")
 	_ packet.Decoder = (*packet.Bool)(nil)
 	_ packet.Decoder = (*packet.Raw)(nil)
 )
@@ -192,7 +192,7 @@ func TestSlice(t *testing.T) {
 		packet.Vint30(14),
 	}
 	s := packet.Slice{
-		packet.String("OK"),
+		packet.Literal("OK"),
 		packet.Bytes([]byte(text)),
 		packet.Bool(true),
 		packet.Vint30(len(vs)),
@@ -250,7 +250,7 @@ func TestParse(t *testing.T) {
 	want := packet.Slice{
 		packet.Bytes("fee fi fo fum"),
 		packet.Vint30(12345),
-		packet.String("OK"),
+		packet.Literal("OK"),
 		packet.Vint30(67890),
 	}
 
@@ -259,7 +259,7 @@ func TestParse(t *testing.T) {
 
 	var b packet.Bytes
 	var v1, v2 packet.Vint30
-	nr, err := packet.Parse(enc, &b, &v1, packet.String("OK"), &v2)
+	nr, err := packet.Parse(enc, &b, &v1, packet.Literal("OK"), &v2)
 	if err != nil {
 		t.Fatalf("Parse: unexpected error: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestParse(t *testing.T) {
 		t.Errorf("Parse: used %d bytes, want %d", nr, len(enc))
 	}
 
-	if diff := cmp.Diff(packet.Slice{b, v1, packet.String("OK"), v2}, want); diff != "" {
+	if diff := cmp.Diff(packet.Slice{b, v1, packet.Literal("OK"), v2}, want); diff != "" {
 		t.Errorf("Parse (-got, +want):\n%s", diff)
 	}
 }

@@ -33,7 +33,7 @@ func (b *Bytes) Decode(buf []byte) int {
 }
 
 // Decode implements the Decoder interface.
-func (s String) Decode(buf []byte) int {
+func (s Literal) Decode(buf []byte) int {
 	nb, _ := ParseLiteral(string(s), buf)
 	return nb
 }

@@ -118,16 +118,26 @@ func ParseBytes(buf []byte) (int, Bytes) {
 	return end, buf[nb:end]
 }
 
-// String is a string that encodes as the literal sequence of bytes comprising
+// Literal is a literal string that encodes as the sequence of bytes comprising
 // the string without padding or framing.
-type String string
+type Literal string
 
 // EncodedLen reports the number of bytes needed to encode s, which is equal
 // to the length of s in bytes.
-func (s String) EncodedLen() int { return len(s) }
+func (s Literal) EncodedLen() int { return len(s) }
 
 // Encode appends the encoded value of s to buf and returns the updated slice.
-func (s String) Encode(buf []byte) []byte { return append(buf, s...) }
+func (s Literal) Encode(buf []byte) []byte { return append(buf, s...) }
+
+// ParseLiteral decodes the specified string from the front of buf, and reports
+// the number of bytes consumed. If len(buf) < len(s) or the prefix is not
+// equal to s, it returns -1, nil. The slice returned shares storage with buf.
+func ParseLiteral(s string, buf []byte) (int, []byte) {
+	if len(buf) < len(s) || string(buf[:len(s)]) != s {
+		return -1, nil
+	}
+	return len(s), buf[:len(s)]
+}
 
 // Bool is a bool that encodes as a single byte with value 0 or 1.
 type Bool bool
@@ -185,16 +195,6 @@ type Encoder interface {
 	// returns the updated slice. If the value cannot be encoded, Encode must
 	// panic.
 	Encode([]byte) []byte
-}
-
-// ParseLiteral decodes the specified string from the front of buf, and reports
-// the number of bytes consumed. If len(buf) < len(s) or the prefix is not
-// equal to s, it returns -1, nil.
-func ParseLiteral(s string, buf []byte) (int, []byte) {
-	if len(buf) < len(s) || string(buf[:len(s)]) != s {
-		return -1, nil
-	}
-	return len(s), buf[:len(s)]
 }
 
 // A Slice is a sequence of Encoders that itself implements the Encoder interface.
