@@ -10,6 +10,22 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+// Satisfaction checks.
+var (
+	_ packet.Encoder = packet.Vint30(0)
+	_ packet.Encoder = packet.Bytes(nil)
+	_ packet.Encoder = packet.String("")
+	_ packet.Encoder = packet.Bool(false)
+	_ packet.Encoder = packet.Raw(nil)
+	_ packet.Encoder = packet.Slice(nil)
+
+	_ packet.Decoder = (*packet.Vint30)(nil)
+	_ packet.Decoder = (*packet.Bytes)(nil)
+	_ packet.Decoder = packet.String("")
+	_ packet.Decoder = (*packet.Bool)(nil)
+	_ packet.Decoder = (*packet.Raw)(nil)
+)
+
 func TestVint30(t *testing.T) {
 	tests := []struct {
 		input packet.Vint30
@@ -126,6 +142,44 @@ func TestBytes(t *testing.T) {
 			t.Errorf("Index %d: got %q, want %q", i, got, tests[i].want)
 		}
 		all = all[nb:]
+	}
+}
+
+func TestRaw(t *testing.T) {
+	const text = "0123456789"
+	tests := []struct {
+		input packet.Raw
+		nb    int
+		want  string
+	}{
+		{nil, 0, ""},                    // ok, empty
+		{packet.Raw{}, 0, ""},           // ok, empty
+		{packet.Raw("abcd"), 4, "0123"}, // ok, nonempty
+		{packet.Raw("---------------"), -1, "---------------"}, // value doesn't change
+	}
+
+	buf := []byte(text)
+	for _, tc := range tests {
+		nb := tc.input.Decode(buf)
+		if nb != tc.nb {
+			t.Errorf("Decode %v: got %d, want %d", tc.input, nb, tc.nb)
+		} else if string(tc.input) != tc.want {
+			t.Errorf("Decode: got %q, want %q", tc.input, tc.want)
+		}
+		if tc.nb <= 0 {
+			continue
+		}
+
+		// Verify that we can round-trip the value.
+		if enc := string(tc.input.Encode(nil)); enc != tc.want {
+			t.Errorf("Encode %v: got %q, want %q", tc.input, enc, tc.want)
+		}
+
+		// Verify that we got a copy.
+		tc.input[0] = 255
+		if string(buf) != text {
+			t.Errorf("Value is shared with the input")
+		}
 	}
 }
 

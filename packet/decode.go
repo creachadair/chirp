@@ -48,6 +48,17 @@ func (b *Bool) Decode(buf []byte) int {
 	return nb
 }
 
+// Decode implements the Decoder interface.  Decoding succeeds if buf is at
+// least as long as *r, and in that case copies those bytes into r.
+func (r *Raw) Decode(buf []byte) int {
+	nb, v := ParseRaw(len(*r), buf)
+	if nb < 0 {
+		return -1
+	}
+	copy(*r, v)
+	return nb
+}
+
 // Parse parses buf into the specified decoder values, returning the total
 // number of bytes consumed.
 func Parse(buf []byte, into ...Decoder) (int, error) {

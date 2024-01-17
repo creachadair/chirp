@@ -157,6 +157,24 @@ func ParseBool(buf []byte) (int, Bool) {
 	}
 }
 
+// Raw is a slice of bytes that encodes literally without framing.
+type Raw []byte
+
+// EncodedLen reports the number of bytes needed to encode r, which is len(r).
+func (r Raw) EncodedLen() int { return len(r) }
+
+// Encode appends the bytes of r to buf, and returns the updated slice.
+func (r Raw) Encode(buf []byte) []byte { return append(buf, r...) }
+
+// ParseRaw decodes a slice of n bytes from the front of buf, and reports the
+// number of bytes consumed. If len(buf) < n, it returns -1, nil.
+func ParseRaw(n int, buf []byte) (int, []byte) {
+	if len(buf) < n {
+		return -1, nil
+	}
+	return n, buf[:n]
+}
+
 // An Encoder is a value that supports being encoded into binary form.
 type Encoder interface {
 	// EncodedLen reports the number of bytes needed to encode its receiver.
@@ -167,15 +185,6 @@ type Encoder interface {
 	// returns the updated slice. If the value cannot be encoded, Encode must
 	// panic.
 	Encode([]byte) []byte
-}
-
-// ParsePrefix decodes a slice of n bytes from the front of buf, and reports
-// the number of bytes consumed. If len(buf) < n, it returns -1, nil.
-func ParsePrefix(n int, buf []byte) (int, []byte) {
-	if len(buf) < n {
-		return -1, nil
-	}
-	return n, buf[:n]
 }
 
 // ParseLiteral decodes the specified string from the front of buf, and reports
