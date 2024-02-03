@@ -82,7 +82,7 @@ func (p *Packet) String() string {
 	if pay == "" {
 		pay = fmt.Sprint(p.Payload)
 	}
-	return fmt.Sprintf("Packet(CP%v, %v, %s)", p.Protocol, p.Type, pay)
+	return fmt.Sprintf("Packet(v%v, %v, %s)", p.Protocol, p.Type, pay)
 }
 
 // PacketType describes the structure type of a Chirp v0 packet.
@@ -159,7 +159,7 @@ func (r *Request) Decode(data []byte) error {
 
 // String returns a human-friendly rendering of the request.
 func (r Request) String() string {
-	return fmt.Sprintf("Request(ID=%v, Method=%q, %s)", r.RequestID, r.Method, trimData(r.Data))
+	return fmt.Sprintf("Request(ID=%v, M=%q, %s)", r.RequestID, r.Method, trimData(r.Data))
 }
 
 // Response is the payload format for a Chirp v0 response packet.
@@ -202,13 +202,13 @@ func (r Response) String() string {
 	if r.Code == CodeServiceError {
 		var ed ErrorData
 		if ed.Decode(r.Data) == nil {
-			data = fmt.Sprintf("ErrorData(Code=%d, [%d bytes], %q)", ed.Code, len(ed.Data), ed.Message)
+			data = fmt.Sprintf("ErrorData(C=%d, [%d bytes], %q)", ed.Code, len(ed.Data), ed.Message)
 		}
 	}
 	if data == "" {
 		data = trimData(r.Data)
 	}
-	return fmt.Sprintf("Response(ID=%v, Code=%v, %s)", r.RequestID, r.Code, data)
+	return fmt.Sprintf("Response(ID=%v, C=%v, %s)", r.RequestID, r.Code, data)
 }
 
 // ResultCode describes the result status of a completed call.  All result
@@ -299,9 +299,9 @@ func (e ErrorData) Encode() []byte {
 
 func trimData(data []byte) string {
 	if len(data) > 16 {
-		return fmt.Sprintf("Data=%q +%d...", data[:16], len(data)-16)
+		return fmt.Sprintf("D=%q +%d...", data[:16], len(data)-16)
 	}
-	return fmt.Sprintf("Data=%q", data)
+	return fmt.Sprintf("D=%q", data)
 }
 
 // truncate returns a prefix of a UTF-8 string s, having length no greater than
