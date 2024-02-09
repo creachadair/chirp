@@ -313,7 +313,7 @@ func truncate(s string, n int) string {
 	}
 
 	// Back up until we find the beginning of a UTF-8 encoding.
-	for n > 0 && s[n-1]&0xc0 == 0x80 { // 0x10... is a continuation byte
+	for n > 0 && s[n-1]&0xc0 == 0x80 { // 0b10... is a continuation byte
 		n--
 	}
 
@@ -322,7 +322,7 @@ func truncate(s string, n int) string {
 	// if we only have to check in one direction.
 	//
 	// Otherwise, we have a single-byte code (0x00... or 0x01...).
-	if n > 0 && s[n-1]&0xc0 == 0xc0 { // 0x11... starts a multibyte encoding
+	if n > 0 && s[n-1]&0xc0 == 0xc0 { // 0b11... starts a multibyte encoding
 		n--
 	}
 	return s[:n]
