@@ -547,7 +547,7 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		data, err := func() (_ []byte, err error) {
 			// Ensure a panic out of the handler is turned into a graceful response.
 			defer func() {
-				if x := recover(); x != nil && err == nil {
+				if x := recover(); x != nil {
 					err = fmt.Errorf("handler panicked (recovered): %v", x)
 				}
 			}()
@@ -647,7 +647,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		return func() (err error) {
 			// Ensure a panic out of a packet handler is turned into a protocol fatal.
 			defer func() {
-				if x := recover(); x != nil && err == nil {
+				if x := recover(); x != nil {
 					err = fmt.Errorf("packet handler panicked (recovered): %v", x)
 				}
 			}()
