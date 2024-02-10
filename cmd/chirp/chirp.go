@@ -33,7 +33,7 @@ corresponding argument is processed:
   p  : a Pascal style string with a 1-byte length (short for "!(r)")
   q  : a quoted literal string (Go style) without framing
   r  : a raw literal string encoded without framing
-  s  : a string encoded with a vint30 length prefix
+  s  : a string encoded with a vint30 length (short for "?(r)")
   %  : a Boolean constant (true or false)
   v  : a vint30 value (unsigned)
   1  : a uint8 value (1 byte)
