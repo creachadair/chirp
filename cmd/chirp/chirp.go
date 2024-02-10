@@ -2,12 +2,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/creachadair/chirp/packet"
 	"github.com/creachadair/command"
@@ -27,6 +29,7 @@ The pattern specifies the sequence of values to concatenate into the packet.
 Whitespace in the pattern is ignored; otherwise the pattern specifies how the
 corresponding argument is processed:
 
+  b  : a base64 string encoded without framing
   p  : a Pascal style string with a 1-byte length prefix
   q  : a quoted literal string (Go style) without framing
   r  : a raw literal string encoded without framing
@@ -98,7 +101,7 @@ func formatData(pat string, args []string) (packet.Slice, []string, error) {
 	for i := 0; i < len(pat); i++ {
 		c := pat[i]
 		switch c {
-		case 'p', 'q', 'r', 's', '%', 'v', '1', '2', '4', '8':
+		case 'b', 'p', 'q', 'r', 's', '%', 'v', '1', '2', '4', '8':
 			// OK, these need an argument (see below)
 		case ' ', '\t', '\n':
 			// Skip whitespace.
@@ -135,6 +138,12 @@ func formatData(pat string, args []string) (packet.Slice, []string, error) {
 			return nil, nil, fmt.Errorf("missing argument for %c", c)
 		}
 		switch c {
+		case 'b':
+			dec, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(args[0], "="))
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid base64: %w", err)
+			}
+			enc = append(enc, packet.Raw(dec))
 		case 'p':
 			if len(args[0]) > 255 {
 				return nil, nil, fmt.Errorf("length %d > 255 too long for p", len(args[0]))
