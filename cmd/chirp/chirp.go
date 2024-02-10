@@ -30,7 +30,7 @@ Whitespace in the pattern is ignored; otherwise the pattern specifies how the
 corresponding argument is processed:
 
   b  : a base64 string encoded without framing
-  p  : a Pascal style string with a 1-byte length prefix
+  p  : a Pascal style string with a 1-byte length (short for "!(r)")
   q  : a quoted literal string (Go style) without framing
   r  : a raw literal string encoded without framing
   s  : a string encoded with a vint30 length prefix
@@ -52,12 +52,14 @@ Nested subpatterns are permitted.  Each subpattern is encoded according to its
 contents, with a length prefix prepended. By default, the length prefix is a vint30,
 but the following symbols modify the length encoding for future subpatterns:
 
+  !  : encode length as a uint8 (1 byte)
   @  : encode length as a uint16 (2 bytes)
   $  : encode length as a uint32 (4 bytes)
   *  : encode length as a uint64 (8 bytes)
   ?  : encode length as a vint30 (this is the default)
 
-Subpatterns may be nested.
+The byte order and length encoding are reset to the defaults within a subpattern
+and changes to those values do persist after the subpattern ends.
 `,
 				Run: func(env *command.Env) error {
 					if len(env.Args) == 0 {
@@ -93,6 +95,8 @@ func formatData(pat string, args []string) (packet.Slice, []string, error) {
 			return packet.Raw(byteOrder.AppendUint32(nil, uint32(n)))
 		case '*':
 			return packet.Raw(byteOrder.AppendUint64(nil, uint64(n)))
+		case '!':
+			return packet.Raw([]byte{byte(n)})
 		default:
 			panic("invalid size type: " + string(size))
 		}
@@ -106,7 +110,7 @@ func formatData(pat string, args []string) (packet.Slice, []string, error) {
 		case ' ', '\t', '\n':
 			// Skip whitespace.
 			continue
-		case '@', '$', '*', '?':
+		case '!', '@', '$', '*', '?':
 			// Set sub-pattern size encoding.
 			size = c
 			continue
