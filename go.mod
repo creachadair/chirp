@@ -10,4 +10,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 )
 
-require github.com/creachadair/mds v0.8.2
+require (
+	github.com/creachadair/command v0.1.5
+	github.com/creachadair/mds v0.8.2
+)
