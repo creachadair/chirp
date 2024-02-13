@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"unicode/utf8"
+
+	"github.com/creachadair/mds/mstr"
 )
 
 // Packet is the parsed format of a Chirp v0 packet.
@@ -286,7 +288,7 @@ func (e ErrorData) Error() string {
 
 // Encode encodes the error data in binary format.
 func (e ErrorData) Encode() []byte {
-	msg := truncate(e.Message, 65535)
+	msg := mstr.Trunc(e.Message, 65535)
 	mlen := len(msg)
 
 	buf := make([]byte, 4+mlen+len(e.Data)) // 2 code, 2 length
@@ -302,30 +304,6 @@ func trimData(data []byte) string {
 		return fmt.Sprintf("D=%q +%d...", data[:16], len(data)-16)
 	}
 	return fmt.Sprintf("D=%q", data)
-}
-
-// truncate returns a prefix of a UTF-8 string s, having length no greater than
-// n bytes.  If s exceeds this length, it is truncated at a point ≤ n so that
-// the result does not end in a partial UTF-8 encoding.
-func truncate(s string, n int) string {
-	if n >= len(s) {
-		return s
-	}
-
-	// Back up until we find the beginning of a UTF-8 encoding.
-	for n > 0 && s[n-1]&0xc0 == 0x80 { // 0b10... is a continuation byte
-		n--
-	}
-
-	// If we're at the beginning of a multi-byte encoding, back up one more to
-	// skip it. It's possible the value was already complete, but it's simpler
-	// if we only have to check in one direction.
-	//
-	// Otherwise, we have a single-byte code (0x00... or 0x01...).
-	if n > 0 && s[n-1]&0xc0 == 0xc0 { // 0b11... starts a multibyte encoding
-		n--
-	}
-	return s[:n]
 }
 
 // Decode decodes data into a Chirp v0 error data payload.
