@@ -59,7 +59,7 @@ but the following symbols modify the length encoding for future subpatterns:
   ?  : encode length as a vint30 (this is the default)
 
 The byte order and length encoding are reset to the defaults within a subpattern
-and changes to those values do persist after the subpattern ends.
+and changes to those values do not persist after the subpattern ends.
 `,
 				Run: func(env *command.Env) error {
 					if len(env.Args) == 0 {
