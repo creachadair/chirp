@@ -83,7 +83,7 @@ and changes to those values do not persist after the subpattern ends.
 }
 
 func formatData(pat string, args []string) (packet.Slice, []string, error) {
-	size := byte('$')
+	size := byte('?')
 	var byteOrder binary.AppendByteOrder = binary.BigEndian
 	packSize := func(n int) packet.Encoder {
 		switch size {
