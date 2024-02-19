@@ -588,9 +588,11 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 // dispatchPacket routes an inbound packet from the remote peer.
 // Any error it reports is protocol fatal.
 func (p *Peer) dispatchPacket(pkt *Packet) error {
-	if p.plog != nil {
-		p.plog(PacketInfo{Packet: pkt, Sent: false})
+	p.logPacket(pkt, false)
+	if pkt.Protocol != 0 {
+		return nil // we understand only v0 packets
 	}
+
 	switch pkt.Type {
 	case PacketRequest:
 		var req Request
@@ -657,6 +659,12 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 	return nil
 }
 
+func (p *Peer) logPacket(pkt *Packet, sent bool) {
+	if p.plog != nil {
+		p.plog(PacketInfo{Packet: pkt, Sent: sent})
+	}
+}
+
 // releaseID releases the call state for the specified outbound request id.
 func (p *Peer) releaseIDLocked(id uint32) {
 	delete(p.ocall, id)
@@ -669,9 +677,7 @@ func (p *Peer) sendOut(pkt *Packet) error {
 	p.out.Lock()
 	defer p.out.Unlock()
 	peerMetrics.packetSent.Add(1)
-	if p.plog != nil {
-		p.plog(PacketInfo{Packet: pkt, Sent: true})
-	}
+	p.logPacket(pkt, true)
 	return p.out.ch.Send(pkt)
 }
 

@@ -360,8 +360,8 @@ func TestProtocolFatal(t *testing.T) {
 		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'C', 'P', 1, 2, 0, 0, 0, 0})
-		mustErr(t, p.Wait(), "invalid protocol version")
+		tw.Write([]byte{'C', 'X', 0, 2, 0, 0, 0, 0})
+		mustErr(t, p.Wait(), "invalid protocol magic")
 	})
 
 	t.Run("ShortHeader", func(t *testing.T) {
@@ -514,6 +514,40 @@ func TestCustomPacket(t *testing.T) {
 	}
 	if diff := cmp.Diff([]*chirp.Packet{p2}, got); diff != "" {
 		t.Errorf("Custom packet (-want, +got):\n%s", diff)
+	}
+}
+
+func TestProtocolVersion(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	pkt := &chirp.Packet{
+		Protocol: 99, // specifically, not 0
+		Type:     chirp.PacketRequest,
+		Payload: chirp.Request{
+			RequestID: 12345,
+			Method:    "foo",
+			Data:      []byte("hello"),
+		}.Encode(),
+	}
+
+	ac, bc := channel.Direct()
+	a := chirp.NewPeer().LogPackets(func(pi chirp.PacketInfo) {
+		if pi.Sent {
+			// The peer should not send any packets.
+			t.Errorf("Unexpected packet sent: %v", pi)
+		} else if diff := cmp.Diff(pi.Packet, pkt); diff != "" {
+			// The peer should get the packet we sent.
+			t.Errorf("Received (-got, +want):\n%s", diff)
+		} else {
+			t.Logf("Got expected packet: %v", pi)
+		}
+	}).Start(ac)
+	defer func() { bc.Close(); a.Wait() }()
+
+	// Send a request packet with an unrecognized protocol version.  The peer
+	// should drop this packet, so we should not get a reply.
+	if err := bc.Send(pkt); err != nil {
+		t.Fatalf("Send failed: %v", err)
 	}
 }
 

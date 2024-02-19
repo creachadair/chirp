@@ -41,8 +41,8 @@ func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return int64(nr), fmt.Errorf("short packet header: %w", err)
 	}
-	if p := string(buf[:3]); p != "CP\x00" {
-		return int64(nr), fmt.Errorf("invalid protocol version %q", p)
+	if p := string(buf[:2]); p != "CP" {
+		return int64(nr), fmt.Errorf("invalid protocol magic %q", p)
 	}
 
 	p.Protocol = buf[2]

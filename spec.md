@@ -179,7 +179,8 @@ Channel failures, resource exhaustion, and fundamental errors in the protocol im
 
 A peer MUST **silently discard**:
 
-- A packet with an unrecognized packet type.
+- A valid packet with an unrecognized protocol number.
+- A valid packet with an unrecognized packet type.
 - A Response packet with a completed or unknown request ID.
 - A Cancel packet with a completed or unknown request ID.
 
