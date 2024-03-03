@@ -29,10 +29,9 @@ func TestLoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	base := chirp.NewPeer().Handle("100", slowEcho)
 	loop := taskgroup.Go(func() error {
-		return peers.Loop(ctx, peers.NetAccepter(lst), func() *chirp.Peer {
-			return chirp.NewPeer().Handle("100", slowEcho)
-		})
+		return peers.Loop(ctx, peers.NetAccepter(lst), base.Clone)
 	})
 	t.Logf("Started peer loop...")
 

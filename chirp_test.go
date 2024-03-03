@@ -890,3 +890,76 @@ func TestRegression(t *testing.T) {
 		}
 	})
 }
+
+func TestClone(t *testing.T) {
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	type echoKey struct{}
+	ctx := context.Background()
+	vctx := context.WithValue(context.Background(), echoKey{}, "x")
+	checkCall := func(p *chirp.Peer, method, want string) {
+		t.Helper()
+		if rsp, err := p.Call(ctx, method, nil); err != nil {
+			t.Errorf("Call %q: unexpected error: %v", method, err)
+		} else if got := string(rsp.Data); got != want {
+			t.Errorf("Call %q: got %q, want %q", method, got, want)
+		}
+	}
+
+	const ptype = 129
+	var acount, ccount int
+	var pg sync.WaitGroup
+
+	checkSend := func(p *chirp.Peer) {
+		t.Helper()
+		pg.Add(1)
+		if err := p.SendPacket(ptype, nil); err != nil {
+			t.Fatalf("SendPacket unexpectedly failed: %v", err)
+		}
+	}
+
+	loc.A.NewContext(func() context.Context { return vctx })
+	loc.A.Handle("test", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+		return []byte(ctx.Value(echoKey{}).(string)), nil
+	})
+	loc.A.HandlePacket(ptype, func(context.Context, *chirp.Packet) error { defer pg.Done(); acount++; return nil })
+
+	cp := loc.A.Clone()
+	cp.Handle("mirror", func(context.Context, *chirp.Request) ([]byte, error) { return []byte("y"), nil })
+
+	x, y := channel.Direct()
+	cp.Start(y)
+	defer cp.Stop()
+	cc := chirp.NewPeer().Start(x) // caller for cp
+	defer cc.Stop()
+
+	// Both A and its clone should respond to "test".
+	checkCall(loc.B, "test", "x")
+	checkCall(cc, "test", "x")
+
+	// The clone has a handler for "mirror" but A does not.
+	checkCall(cc, "mirror", "y")
+	if rsp, err := loc.B.Call(ctx, "mirror", nil); err == nil {
+		t.Errorf("Call mirror: got %v, want error", rsp)
+	}
+
+	// Both A and its clone should share a packet handler for ptype.
+	// Note the waitgroup dance is to ensure we sync with the handler.
+	checkSend(loc.B)
+	pg.Wait() // so they don't race on writing acount
+	checkSend(cc)
+	pg.Wait()
+	if acount != 2 {
+		t.Errorf("After send: got %d packets, want %d", acount, 2)
+	}
+
+	// Now if we modify the packet handler, they should diverge.
+	cp.HandlePacket(ptype, func(context.Context, *chirp.Packet) error { defer pg.Done(); ccount++; return nil })
+	checkSend(loc.B) // goes to original handler
+	checkSend(cc)    // goes to updated handler
+	pg.Wait()
+	if acount != 3 || ccount != 1 {
+		t.Errorf("After send: got %d, %d; want %d, %d", acount, ccount, 3, 1)
+	}
+}

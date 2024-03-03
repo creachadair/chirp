@@ -8,6 +8,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"strings"
 	"sync"
@@ -123,7 +124,11 @@ func (p *Peer) Start(ch Channel) *Peer {
 	p.ocall = make(map[uint32]pending)
 	p.nexto = 0
 	p.icall = make(map[uint32]func())
-	p.base = context.Background
+	if p.base == nil {
+		// N.B. Don't overwrite this if we still have a value from a previous
+		// session on this same peer.
+		p.base = context.Background
+	}
 
 	g.Go(func() error {
 		for {
@@ -146,6 +151,19 @@ func (p *Peer) Start(ch Channel) *Peer {
 // Metrics returns a metrics map for the peer. It is safe for the caller to add
 // additional metrics to the map while the peer is active.
 func (p *Peer) Metrics() *expvar.Map { return peerMetrics.emap }
+
+// Clone returns a new unstarted peer that has the same method handlers, packet
+// handlers, and base context function as p.  After cloning, further changes to
+// either peer do not affect the other.
+func (p *Peer) Clone() *Peer {
+	p.μ.Lock()
+	defer p.μ.Unlock()
+	return &Peer{
+		imux: maps.Clone(p.imux),
+		pmux: maps.Clone(p.pmux),
+		base: p.base,
+	}
+}
 
 // Stop closes the channel and terminates the peer. It blocks until the peer
 // has exited and returns its status. After Stop completes it is safe to
