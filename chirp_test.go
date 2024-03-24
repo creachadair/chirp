@@ -87,6 +87,9 @@ func TestPeer(t *testing.T) {
 
 			rsp, err := test.who.Call(ctx, test.methodName, []byte(test.input))
 			if err != nil {
+				if rsp != nil {
+					t.Errorf("Call: got response %+v with error %v", rsp, err)
+				}
 				ce, ok := err.(*chirp.CallError)
 				if !ok {
 					t.Fatalf("Call: got error %[1]T (%[1]v), want *CallError", err)
