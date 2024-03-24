@@ -95,6 +95,18 @@ func TestPeer(t *testing.T) {
 					t.Fatalf("Call: got error %[1]T (%[1]v), want *CallError", err)
 				}
 				t.Logf("CallError: %v", ce)
+
+				// If we got error data from the remote peer, verify that the
+				// CallError correctly unpacked the data from the response.
+				if ce.Err == nil {
+					var ed chirp.ErrorData
+					if err := ed.Decode(ce.Response.Data); err != nil {
+						t.Errorf("Decode response ErrorData: %v", err)
+					} else if diff := cmp.Diff(ed, ce.ErrorData); diff != "" {
+						t.Errorf("ErrorData (-got, +want):\n%s", diff)
+					}
+					t.Logf("Response ErrorData: %v", ed)
+				}
 				rsp = ce.Response
 			}
 
