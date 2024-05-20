@@ -1,9 +1,9 @@
 github.com/creachadair/command v0.1.13 h1:UDKPF3QYPRS/quZPVYZ7sW1JLxLLOgiyVSLQ+7wwI2o=
 github.com/creachadair/command v0.1.13/go.mod h1:YKwUE49nAi8qxLl8jCQ0GMPvwdxmIBkJW3LqxgZ7ljk=
-github.com/creachadair/mds v0.14.6 h1:osJ9Ibmvv2nzLWOwNONDwxPEIHEgtNf4Y9UYSsO3JWE=
-github.com/creachadair/mds v0.14.6/go.mod h1:4vrFYUzTXMJpMBU+OA292I6IUxKWCCfZkgXg+/kBZMo=
-github.com/creachadair/taskgroup v0.8.1 h1:+wKambTTYyF6KCJ8P8IWrCr7GQq9SnJ/JXzgORN4ZU4=
-github.com/creachadair/taskgroup v0.8.1/go.mod h1:+1hJc8zL1rQkxcMVqEYJ0UPGtwl6Iz1+fd4zcOLtt+A=
+github.com/creachadair/mds v0.14.7 h1:VkY1pop2sqIfbDEeB9FObh/STRd/DNHyNtlE55Z95UQ=
+github.com/creachadair/mds v0.14.7/go.mod h1:4vrFYUzTXMJpMBU+OA292I6IUxKWCCfZkgXg+/kBZMo=
+github.com/creachadair/taskgroup v0.9.0 h1:kzXSea5C7R5DtnKFBOTEW3hvmCkiVnRkODMVDMgSS6k=
+github.com/creachadair/taskgroup v0.9.0/go.mod h1:+1hJc8zL1rQkxcMVqEYJ0UPGtwl6Iz1+fd4zcOLtt+A=
 github.com/fortytw2/leaktest v1.3.0 h1:u8491cBMTQ8ft8aeV+adlcytMZylmA5nnwwkRZjI8vw=
 github.com/fortytw2/leaktest v1.3.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
