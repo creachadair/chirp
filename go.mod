@@ -2,8 +2,6 @@ module github.com/creachadair/chirp
 
 go 1.22
 
-toolchain go1.21.2
-
 require (
 	github.com/creachadair/taskgroup v0.9.0
 	github.com/fortytw2/leaktest v1.3.0
