@@ -1,6 +1,6 @@
 # Chirp v0 Specification
 
-Chirp is a lightweight remote procedure call protocol. Peers exchange binary packets over a shared channel, following the packet format described below. The protocol is intended to be easy to implement in a variety of different languages and to perform efficiently over bidirectional stream-oriented local transport mechanisms such as sockets and pipes. The packet format is byte-oriented and uses fixed header and payload layouts to minimize the amount of bit-level manipulation necessary to encode and decode packets.
+Chirp is a lightweight remote procedure call protocol. Peers exchange binary packets over a shared channel, following the packet format described below. The protocol is intended to be easy to implement in a variety of different languages and to perform efficiently over bidirectional stream-oriented transports like sockets and pipes. The packet format is byte-oriented and uses fixed header and payload layouts to minimize the amount of bit-level manipulation necessary to encode and decode packets.
 
 This document uses key words as described in [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119).
 
