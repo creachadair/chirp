@@ -10,5 +10,5 @@ require (
 
 require (
 	github.com/creachadair/command v0.1.13
-	github.com/creachadair/mds v0.15.5
+	github.com/creachadair/mds v0.16.0
 )
