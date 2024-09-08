@@ -79,7 +79,7 @@ and changes to those values do not persist after the subpattern ends.
 			command.HelpCommand(nil),
 		},
 	}
-	command.RunOrFail(root.NewEnv(nil).MergeFlags(true), os.Args[1:])
+	command.RunOrFail(root.NewEnv(nil), os.Args[1:])
 }
 
 func formatData(pat string, args []string) (packet.Slice, []string, error) {
