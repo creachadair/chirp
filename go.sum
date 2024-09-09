@@ -1,7 +1,7 @@
 github.com/creachadair/command v0.1.15 h1:ut7OVTGYv5RMqOHJvrmSCtsS8UBzU9tXgQYLdAPZPho=
 github.com/creachadair/command v0.1.15/go.mod h1:JyiZVgQzhzPWa8DdE6Hfl+IOi7DMpXToBEvQCQoST7c=
-github.com/creachadair/mds v0.17.1 h1:lXQbTGKmb3nE3aK6OEp29L1gCx6B5ynzlQ6c1KOBurc=
-github.com/creachadair/mds v0.17.1/go.mod h1:4b//mUiL8YldH6TImXjmW45myzTLNS1LLjOmrk888eg=
+github.com/creachadair/mds v0.20.0 h1:bXQO154c2TDgCY+rRmdIfUqjeqGYejmZ/QayeTNwbp8=
+github.com/creachadair/mds v0.20.0/go.mod h1:4b//mUiL8YldH6TImXjmW45myzTLNS1LLjOmrk888eg=
 github.com/creachadair/taskgroup v0.9.3 h1:PGvqKo+gvzckr/IL69Lj4aKzOSwY5cJBMZFlvW5eidU=
 github.com/creachadair/taskgroup v0.9.3/go.mod h1:9oDDPt/5QPS4iylvPMC81GRlj+1je8AFDbjUh4zaQWo=
 github.com/fortytw2/leaktest v1.3.0 h1:u8491cBMTQ8ft8aeV+adlcytMZylmA5nnwwkRZjI8vw=
