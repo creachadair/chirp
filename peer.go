@@ -49,25 +49,17 @@ type Handler func(context.Context, *Request) ([]byte, error)
 type PacketHandler func(context.Context, *Packet) error
 
 // A PacketLogger logs a packet exchanged with the remote peer.
-type PacketLogger func(pkt PacketInfo)
+// The value of dir is either [Send] for a packet sent by the local peer, or
+// [Recv] for a packet received from the remote peer.
+type PacketLogger func(pkt *Packet, dir PacketDir)
 
-// A PacketInfo combines a packet and a flag indicating whether the packet was
-// sent or received.
-type PacketInfo struct {
-	*Packet      // the packet being logged
-	Sent    bool // whether the packet was sent (true) or received (false)
-}
+// PacketDir indicates the "direction" of a packet, either [Send] or [Recv].
+type PacketDir byte
 
-func (p PacketInfo) dir() string {
-	if p.Sent {
-		return "send"
-	}
-	return "recv"
-}
-
-func (p PacketInfo) String() string {
-	return fmt.Sprintf("%v %v", p.dir(), p.Packet)
-}
+const (
+	Send PacketDir = 'S' // a packet sent from local to remote
+	Recv PacketDir = 'R' // a packet received by local from remote
+)
 
 // A Peer implements a Chirp v0 peer. A zero-valued Peer is ready for use, but
 // must not be copied after any method has been called.
@@ -609,7 +601,7 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 // dispatchPacket routes an inbound packet from the remote peer.
 // Any error it reports is protocol fatal.
 func (p *Peer) dispatchPacket(pkt *Packet) error {
-	p.logPacket(pkt, false)
+	p.logPacket(pkt, Recv)
 	if pkt.Protocol != 0 {
 		return nil // we understand only v0 packets
 	}
@@ -680,9 +672,9 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 	return nil
 }
 
-func (p *Peer) logPacket(pkt *Packet, sent bool) {
+func (p *Peer) logPacket(pkt *Packet, dir PacketDir) {
 	if p.plog != nil {
-		p.plog(PacketInfo{Packet: pkt, Sent: sent})
+		p.plog(pkt, dir)
 	}
 }
 
@@ -698,7 +690,7 @@ func (p *Peer) sendOut(pkt *Packet) error {
 	p.out.Lock()
 	defer p.out.Unlock()
 	peerMetrics.packetSent.Add(1)
-	p.logPacket(pkt, true)
+	p.logPacket(pkt, Send)
 	return p.out.ch.Send(pkt)
 }
 

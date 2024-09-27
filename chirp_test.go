@@ -210,8 +210,8 @@ func TestCancellation(t *testing.T) {
 	wg.Add(3) // there are three packets exchanged below
 
 	var apkt []packet
-	loc.A.LogPackets(func(pkt chirp.PacketInfo) {
-		if !pkt.Sent {
+	loc.A.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+		if dir == chirp.Recv {
 			apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
 			wg.Done()
 		}
@@ -221,8 +221,8 @@ func TestCancellation(t *testing.T) {
 	})
 
 	var bpkt []packet
-	loc.B.LogPackets(func(pkt chirp.PacketInfo) {
-		if !pkt.Sent {
+	loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+		if dir == chirp.Recv {
 			bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
 			wg.Done()
 		}
@@ -490,9 +490,9 @@ func TestCustomPacket(t *testing.T) {
 			rsp := string(pkt.Payload) + " reply"
 			return chirp.ContextPeer(ctx).SendPacket(129, []byte(rsp))
 		}).
-		LogPackets(func(pkt chirp.PacketInfo) {
-			if !pkt.Sent {
-				log = append(log, pkt.Packet)
+		LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			if dir == chirp.Recv {
+				log = append(log, pkt)
 			}
 		})
 	loc.B.
@@ -535,7 +535,7 @@ func TestCustomPacket(t *testing.T) {
 func TestProtocolVersion(t *testing.T) {
 	defer leaktest.Check(t)()
 
-	pkt := &chirp.Packet{
+	want := &chirp.Packet{
 		Protocol: 99, // specifically, not 0
 		Type:     chirp.PacketRequest,
 		Payload: chirp.Request{
@@ -546,22 +546,22 @@ func TestProtocolVersion(t *testing.T) {
 	}
 
 	ac, bc := channel.Direct()
-	a := chirp.NewPeer().LogPackets(func(pi chirp.PacketInfo) {
-		if pi.Sent {
+	a := chirp.NewPeer().LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+		if dir == chirp.Send {
 			// The peer should not send any packets.
-			t.Errorf("Unexpected packet sent: %v", pi)
-		} else if diff := cmp.Diff(pi.Packet, pkt); diff != "" {
+			t.Errorf("Unexpected packet sent: %v", pkt)
+		} else if diff := cmp.Diff(pkt, want); diff != "" {
 			// The peer should get the packet we sent.
 			t.Errorf("Received (-got, +want):\n%s", diff)
 		} else {
-			t.Logf("Got expected packet: %v", pi)
+			t.Logf("Got expected packet: %v", pkt)
 		}
 	}).Start(ac)
 	defer func() { bc.Close(); a.Wait() }()
 
 	// Send a request packet with an unrecognized protocol version.  The peer
 	// should drop this packet, so we should not get a reply.
-	if err := bc.Send(pkt); err != nil {
+	if err := bc.Send(want); err != nil {
 		t.Fatalf("Send failed: %v", err)
 	}
 }
@@ -845,9 +845,9 @@ func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
 }
 
 func logPacket(t *testing.T, tag string) chirp.PacketLogger {
-	return func(pkt chirp.PacketInfo) {
+	return func(pkt *chirp.Packet, dir chirp.PacketDir) {
 		t.Helper()
-		t.Logf("%s: %v", tag, pkt)
+		t.Logf("%s: [%c] %v", tag, dir, pkt)
 	}
 }
 
