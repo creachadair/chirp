@@ -5,7 +5,7 @@
 
 This repository defines Chirp, a lightweight remote procedure call protocol
 suitable for use over stream-oriented transports like sockets and pipes. It
-uses a byte-otiented packet format with fixed headers to minimize the
+uses a byte-oriented packet format with fixed headers to minimize the
 amount of bit-level manipulation necessary to encode and decode messages.
 
 The specification and its implementation are still in development and should
