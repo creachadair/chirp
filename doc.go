@@ -6,8 +6,8 @@
 // packets over a shared reliable channel.  The protocol is intended to be easy
 // to implement in a variety of different languages and to perform efficiently
 // over stream-oriented local transport mechanisms such as sockets and pipes.
-// The packet format is byte-oriented and uses fixed header formats to minimize
-// the amount of bit-level manipulation necessary to encode and decode packets.
+// It uses a byte-oriented packet format with fixed headers to minimize the
+// amount of bit-level manipulation necessary to encode and decode messages.
 //
 // # Peers
 //
