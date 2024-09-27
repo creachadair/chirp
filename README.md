@@ -1,6 +1,7 @@
 # chirp
 
-<!-- [![GoDoc](https://img.shields.io/static/v1?label=godoc&message=reference&color=green)](https://pkg.go.dev/github.com/creachadair/chirp) -->
+[![GoDoc](https://img.shields.io/static/v1?label=godoc&message=reference&color=dustyrose)](https://pkg.go.dev/github.com/creachadair/chirp)
+[![CI](https://github.com/creachadair/chirp/actions/workflows/go-presubmit.yml/badge.svg?event=push&branch=main)](https://github.com/creachadair/chirp/actions/workflows/go-presubmit.yml)
 
 This repository defines Chirp, a lightweight remote procedure call protocol
 suitable for use over stream-oriented transports like sockets and pipes. The
