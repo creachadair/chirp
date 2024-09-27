@@ -4,9 +4,9 @@
 [![CI](https://github.com/creachadair/chirp/actions/workflows/go-presubmit.yml/badge.svg?event=push&branch=main)](https://github.com/creachadair/chirp/actions/workflows/go-presubmit.yml)
 
 This repository defines Chirp, a lightweight remote procedure call protocol
-suitable for use over stream-oriented transports like sockets and pipes. The
-packet format is byte-oriented and uses fixed header formats to minimize the
-amount of bit-level manipulation necessary to encode and decode packets.
+suitable for use over stream-oriented transports like sockets and pipes. It
+uses a byte-otiented packet format with fixed headers to minimize the
+amount of bit-level manipulation necessary to encode and decode messages.
 
 The specification and its implementation are still in development and should
 not be considered ready for production use.
