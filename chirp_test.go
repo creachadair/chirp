@@ -847,7 +847,7 @@ func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
 func logPacket(t *testing.T, tag string) chirp.PacketLogger {
 	return func(pkt *chirp.Packet, dir chirp.PacketDir) {
 		t.Helper()
-		t.Logf("%s: [%c] %v", tag, dir, pkt)
+		t.Logf("%s: [%s] %v", tag, dir, pkt)
 	}
 }
 

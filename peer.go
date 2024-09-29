@@ -54,11 +54,11 @@ type PacketHandler func(context.Context, *Packet) error
 type PacketLogger func(pkt *Packet, dir PacketDir)
 
 // PacketDir indicates the "direction" of a packet, either [Send] or [Recv].
-type PacketDir byte
+type PacketDir string
 
 const (
-	Send PacketDir = 'S' // a packet sent from local to remote
-	Recv PacketDir = 'R' // a packet received by local from remote
+	Send PacketDir = "send" // a packet sent from local to remote
+	Recv PacketDir = "recv" // a packet received by local from remote
 )
 
 // A Peer implements a Chirp v0 peer. A zero-valued Peer is ready for use, but
