@@ -38,10 +38,10 @@ func TestLoop(t *testing.T) {
 	const numClients = 5
 	const numCalls = 5
 
-	g := taskgroup.New(taskgroup.Listen(func(err error) {
+	g := taskgroup.New(func(err error) {
 		cancel()
 		t.Errorf("Task error: %v", err)
-	}))
+	})
 	for i := 0; i < numClients; i++ {
 		g.Go(func() error {
 			conn, err := net.Dial("tcp", addr)

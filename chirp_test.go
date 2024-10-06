@@ -740,7 +740,7 @@ func runConcurrent(t *testing.T, pa, pb *chirp.Peer) {
 	// each other lots of times concurrently and wait for the responses.
 	const numCalls = 128 // per peer
 
-	calls := taskgroup.New(taskgroup.Trigger(cancel))
+	calls := taskgroup.New(cancel)
 	for i := 0; i < numCalls; i++ {
 
 		// Send calls from A to B.
