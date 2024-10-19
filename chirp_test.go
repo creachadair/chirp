@@ -319,18 +319,28 @@ func TestSlowCancellation(t *testing.T) {
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
-	stop := make(chan struct{})     // close to release the blocked 666 handler
-	returned := make(chan struct{}) // closed when the 666 handler returns
+	stop := make(chan struct{}) // close to release the blocked 666 handler
+	logA := logPacket(t, "Peer A")
+
+	var wg sync.WaitGroup
+	wg.Add(2) // 1 response, 1 cancellation
+
+	var rspA []*chirp.Packet
 	loc.A.
 		Handle("666", func(context.Context, *chirp.Request) ([]byte, error) {
-			defer close(returned)
 			<-stop // block until released
 			return []byte("message in a bottle"), nil
 		}).
 		Handle("100", func(context.Context, *chirp.Request) ([]byte, error) {
 			return []byte("ok"), nil
 		}).
-		LogPackets(logPacket(t, "Peer A"))
+		LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			if dir == chirp.Send && pkt.Type == chirp.PacketResponse {
+				rspA = append(rspA, pkt)
+				wg.Done()
+			}
+			logA(pkt, dir)
+		})
 
 	done := make(chan struct{}) // closed when Call(666) returns
 	go func() {
@@ -362,9 +372,22 @@ func TestSlowCancellation(t *testing.T) {
 	}
 
 	close(done) // also releases the blocked 666 handler
-	<-returned
+	wg.Wait()
 
-	// TODO(creachadair): Verify that A sent a CANCELED packet for ID 1.
+	// Make sure we got the CANCELED response (eventually) from the peer.
+	var found bool
+	for i, pkt := range rspA {
+		var rsp chirp.Response
+		if err := rsp.Decode(pkt.Payload); err != nil {
+			t.Fatalf("Decode packet %d: %v", i+1, err)
+		}
+		if rsp.RequestID == 1 && rsp.Code == chirp.CodeCanceled {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("No CANCELED response found for request 1")
+	}
 }
 
 func TestProtocolFatal(t *testing.T) {
