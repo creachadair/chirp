@@ -526,7 +526,7 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		}
 	}()
 
-	// Report duplicate request ID without failing the existing call.
+	// Report duplicate request ID and terminate the existing call.
 	if stop, ok := p.icall[req.RequestID]; ok {
 		stop(errDuplicateRequest)
 		return p.sendOut(&Packet{
