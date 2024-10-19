@@ -202,7 +202,7 @@ The sequence of operations for a call is:
 
 1. The caller sends a `Request(id, method, params)` packet to the callee. At this point the call is *pending*. The call remains pending until either *terminated* or *completed* according to the rules below.
 
-   - If `id` duplicates an already pending request, the callee MUST send a `Response(id, DUPLICATE_REQUEST, nil)` packet. This terminates the call. The callee MUST NOT interrupt or terminate the already-pending request as a result of the duplication.
+   - If `id` duplicates an already pending request, the callee MUST send a `Response(id, DUPLICATE_REQUEST, nil)` packet. This terminates the call. The callee SHOULD also interrupt or terminate the already-pending request, if possible. Whether or not this succeeds, the callee MUST send a second `Response(id, DUPLICATE_REQUEST, nil)` packet as a response to the already-pending request, thus terminating it.
 
    - If `method` is unknown, the callee MUST send a `Response(id, UNKNOWN_METHOD, nil)` packet. This terminates the call.
 

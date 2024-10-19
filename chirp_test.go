@@ -753,6 +753,55 @@ func TestConcurrency(t *testing.T) {
 	})
 }
 
+func TestDuplicate(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	loc := peers.NewLocal()
+
+	started := make(chan struct{})
+	loc.A.Handle("100", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}).LogPackets(logPacket(t, "Peer A"))
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	var rspB []*chirp.Packet
+	loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+		if dir == chirp.Recv {
+			rspB = append(rspB, pkt)
+			wg.Done()
+		}
+	})
+
+	// Send a request with ID 12345 and wait for its handler to be running.
+	loc.B.SendPacket(chirp.PacketRequest, chirp.Request{
+		RequestID: 12345,
+		Method:    "100",
+	}.Encode())
+	<-started
+
+	// Now send another request for ID 12345.
+	loc.B.SendPacket(chirp.PacketRequest, chirp.Request{
+		RequestID: 12345,
+		Method:    "999",
+	}.Encode())
+
+	wg.Wait()
+	loc.Stop()
+
+	// Verify that we got two DUPLICATE_REQUEST responses.
+	wantResp := &chirp.Packet{
+		Type:    chirp.PacketResponse,
+		Payload: chirp.Response{RequestID: 12345, Code: chirp.CodeDuplicateID}.Encode(),
+	}
+	if diff := cmp.Diff(rspB, []*chirp.Packet{wantResp, wantResp}); diff != "" {
+		t.Errorf("Wrong responses (-got, +want):\n%s", diff)
+	}
+}
+
 func runConcurrent(t *testing.T, pa, pb *chirp.Peer) {
 	t.Helper()
 

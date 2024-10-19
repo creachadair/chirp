@@ -88,7 +88,7 @@ type Peer struct {
 	err   error                        // protocol fatal error
 	ocall map[uint32]pending           // outbound calls pending responses
 	nexto uint32                       // next unused outbound call ID
-	icall map[uint32]func()            // requestID → cancel func
+	icall map[uint32]func(error)       // requestID → cancel cause func
 	imux  map[string]Handler           // methodName → handler
 	pmux  map[PacketType]PacketHandler // packetType → packet handler
 	plog  PacketLogger                 // what it says on the tin
@@ -115,7 +115,7 @@ func (p *Peer) Start(ch Channel) *Peer {
 	p.err = nil
 	p.ocall = make(map[uint32]pending)
 	p.nexto = 0
-	p.icall = make(map[uint32]func())
+	p.icall = make(map[uint32]func(error))
 	if p.base == nil {
 		// N.B. Don't overwrite this if we still have a value from a previous
 		// session on this same peer.
@@ -306,6 +306,14 @@ type errUnknownMethod struct{}
 func (errUnknownMethod) Error() string          { return "exec: unknown method" }
 func (errUnknownMethod) ResultCode() ResultCode { return CodeUnknownMethod }
 
+// errDuplicateRequest is an internal sentinel error used to cancel a pending
+// request that shares an ID with another request received later.
+var errDuplicateRequest = errors.New("duplicate request ID")
+
+// errPeerCancel is an internal sentinel error used to cancel a pending
+// request due to an explicit request from the peer.
+var errPeerCancel = errors.New("peer canceled request")
+
 // Exec executes the (local) handler on p for the method, if one exists.
 // If no handler is defined for method, Exec reports an internal error with an
 // empty result; otherwise it returns the result of calling the handler with
@@ -428,7 +436,7 @@ func (p *Peer) fail(err error) {
 
 	// Terminate all incomplete active (inbound) calls.
 	for _, stop := range p.icall {
-		stop()
+		stop(nil)
 	}
 	p.icall = nil
 
@@ -519,7 +527,8 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 	}()
 
 	// Report duplicate request ID without failing the existing call.
-	if _, ok := p.icall[req.RequestID]; ok {
+	if stop, ok := p.icall[req.RequestID]; ok {
+		stop(errDuplicateRequest)
 		return p.sendOut(&Packet{
 			Type: PacketResponse,
 			Payload: Response{
@@ -549,12 +558,12 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 	// Start a goroutine to service the request. The goroutine handles
 	// cancellation and response delivery.
 	pctx := context.WithValue(p.base(), peerContextKey{}, p)
-	ctx, cancel := context.WithCancel(pctx)
-	p.icall[req.RequestID] = cancel
+	ctx, cancelCause := context.WithCancelCause(pctx)
+	p.icall[req.RequestID] = cancelCause
 	peerMetrics.callActive.Add(1)
 
-	p.tasks.Go(func() error {
-		defer cancel()
+	p.tasks.Run(func() {
+		defer cancelCause(nil)
 		defer peerMetrics.callActive.Add(-1)
 
 		data, err := func() (_ []byte, err error) {
@@ -568,14 +577,10 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		}()
 
 		rsp := &Response{RequestID: req.RequestID}
-		if ctx.Err() != nil || err == context.Canceled || err == context.DeadlineExceeded {
-			// N.B. Only do this for the unwrapped sentinel errors.
-
-			// If the context terminated, treat this as a cancellation even if the
-			// handler succeeded. This usually means the context timed out or the
-			// remote peer sent a cancellation that the handler ignored.
-
+		if cerr := context.Cause(ctx); errors.Is(cerr, errPeerCancel) {
 			rsp.Code = CodeCanceled
+		} else if errors.Is(cerr, errDuplicateRequest) {
+			rsp.Code = CodeDuplicateID
 		} else if err == nil {
 			rsp.Code = CodeSuccess
 			rsp.Data = data
@@ -593,7 +598,6 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 			rsp.Data = ErrorData{Message: err.Error()}.Encode()
 		}
 		p.sendRsp(rsp)
-		return nil
 	})
 	return nil
 }
@@ -628,7 +632,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		// If there is a dispatch in flight for this request, signal it to stop.
 		// The dispatch wrapper will figure out how to reply and clean up.
 		if stop, ok := p.icall[req.RequestID]; ok {
-			stop()
+			stop(errPeerCancel)
 		}
 		return nil
 
