@@ -17,7 +17,7 @@ import (
 	"github.com/creachadair/taskgroup"
 )
 
-// A Channel is a reliable ordered stream of packets shared by two peers.
+// A Channel is a reliable stream of packets shared by two peers.
 //
 // The methods of an implementation must be safe for concurrent use by one
 // sender and one receiver.

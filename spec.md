@@ -143,16 +143,15 @@ The specification defines the requirements of the peer.
 
 ### Session Processing
 
-A Chirp protocol session begins by establishing a reliable, bidirectional, ordered channel carrying packets between a pair of peers.
+A Chirp protocol session begins by establishing a reliable, bidirectional channel carrying packets between a pair of peers.
 
 - **Reliable** means the channel must either deliver each packet sent, or must be marked closed and report an error. A closed channel is invalid and must report an error for any subsequent use.
 - **Bidirectional** means packets can be sent and received on the channel concurrently. Sending MUST NOT block receiving and vice versa.
-- **Ordered** means packets sent by either peer must be delivered to the other peer in the order they were sent.
 - Each packet is transmitted whole, there are no fragments.
 
 A session continues until the channel fails or is explicitly closed by either peer. When the channel terminates, all pending inbound calls SHOULD be interrupted, and whether interrupted or not the results of those calls MUST be discarded. All pending outbound calls MUST fail and report errors. The implementation SHOULD log or report a diagnostic to the host and MUST report an error for any subsequent attempt to use the session.
 
-While a session is active, each peer processes the packets sent by the other peer on the channel in order, according to the rules defined below. Either in response to remote peer requests or on behalf of the host, the peer also sends packets to the remote peer.
+While a session is active, each peer processes the packets sent by the other peer on the channel, according to the rules defined below. Either in response to remote peer requests or on behalf of the host, the peer also sends packets to the remote peer.
 
 ### Error Handling
 
