@@ -93,8 +93,6 @@ type Peer struct {
 	pmux  map[PacketType]PacketHandler // packetType → packet handler
 	plog  PacketLogger                 // what it says on the tin
 	base  func() context.Context       // return a new base context
-
-	onExit func(error)
 }
 
 // NewPeer constructs a new unstarted peer.
@@ -393,19 +391,6 @@ func (p *Peer) LogPackets(log PacketLogger) *Peer {
 	return p
 }
 
-// OnExit registers a callback to be invoked when the peer terminates.  The
-// callback is executed synchronously during shutdown, with the same error
-// value that would be reported by the Wait method.
-//
-// Only one exit callback can be registered at a time; if f == nil the callback
-// is removed.
-func (p *Peer) OnExit(f func(error)) *Peer {
-	p.μ.Lock()
-	defer p.μ.Unlock()
-	p.onExit = f
-	return p
-}
-
 // NewContext registers a function that will be called to create a new base
 // context for method and packet handlers. This allows request-specific host
 // resources to be plumbed into a handler.  If it is not set a background
@@ -439,14 +424,7 @@ func (p *Peer) fail(err error) {
 		stop(nil)
 	}
 	p.icall = nil
-
 	p.err = err
-	if p.onExit != nil {
-		if treatErrorAsSuccess(err) {
-			err = nil
-		}
-		p.onExit(err)
-	}
 }
 
 func (p *Peer) sendRsp(rsp *Response) {
