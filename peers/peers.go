@@ -91,14 +91,14 @@ func (n netAccepter) Accept(ctx context.Context) (chirp.Channel, error) {
 	// up when we return before ctx ends.
 	ok := make(chan struct{})
 	defer close(ok)
-	taskgroup.Go(taskgroup.NoError(func() {
+	taskgroup.Run(func() {
 		select {
 		case <-ctx.Done():
 			n.Listener.Close()
 		case <-ok:
 			// release the waiter
 		}
-	}))
+	})
 
 	conn, err := n.Listener.Accept()
 	if err != nil {
