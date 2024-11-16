@@ -11,7 +11,7 @@ require (
 )
 
 require (
-	github.com/creachadair/command v0.1.18
+	github.com/creachadair/command v0.1.19
 	github.com/creachadair/mds v0.21.4
 	honnef.co/go/tools v0.5.1
 )
