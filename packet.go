@@ -28,13 +28,13 @@ func (p Packet) Encode() []byte {
 	return buf
 }
 
-// WriteTo writes the packet to w in binary format. It satisfies io.WriterTo.
+// WriteTo writes the packet to w in binary format. It satisfies [io.WriterTo].
 func (p *Packet) WriteTo(w io.Writer) (int64, error) {
 	nw, err := w.Write(p.Encode())
 	return int64(nw), err
 }
 
-// ReadFrom reads a packet from r in binary format. It satisfies io.ReaderFrom.
+// ReadFrom reads a packet from r in binary format. It satisfies [io.ReaderFrom].
 func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 	var buf [8]byte
 	nr, err := io.ReadFull(r, buf[:])
@@ -126,7 +126,7 @@ type Request struct {
 const MaxMethodLen = 255
 
 // Encode encodes the request data in binary format.
-// This method will panic if r.Method is longer than MaxMethodLen.
+// This method will panic if r.Method is longer than [MaxMethodLen].
 func (r Request) Encode() []byte {
 	mlen := len(r.Method)
 	if mlen > 255 {

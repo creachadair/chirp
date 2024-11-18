@@ -39,18 +39,18 @@ type Channel interface {
 //
 // By default, the error reported by a handler is returned to the caller with
 // error code 0 and the text of the error as its message. A handler may return
-// a value of concrete type ErrorData or *ErrorData to control the error code,
-// message, and auxiliary error data.
+// a value of concrete type [ErrorData] or [*ErrorData] to control the error
+// code, message, and auxiliary error data.
 type Handler func(context.Context, *Request) ([]byte, error)
 
 // A PacketHandler processes a packet from the remote peer. A packet handler
-// can obtain the peer from its context argument using the ContextPeer helper.
-// Any error reported by a packet handler is protocol fatal.
+// can obtain the peer from its context argument using the [ContextPeer]
+// helper.  Any error reported by a packet handler is protocol fatal.
 type PacketHandler func(context.Context, *Packet) error
 
-// A PacketLogger logs a packet exchanged with the remote peer.
-// The value of dir is either [Send] for a packet sent by the local peer, or
-// [Recv] for a packet received from the remote peer.
+// A PacketLogger logs a packet exchanged with the remote peer.  The value of
+// dir is either [Send] for a packet sent by the local peer, or [Recv] for a
+// packet received from the remote peer.
 type PacketLogger func(pkt *Packet, dir PacketDir)
 
 // PacketDir indicates the "direction" of a packet, either [Send] or [Recv].
@@ -64,16 +64,16 @@ const (
 // A Peer implements a Chirp v0 peer. A zero-valued Peer is ready for use, but
 // must not be copied after any method has been called.
 //
-// Call Start with a channel to start the service routine for the peer.  Once
-// started, a peer runs until Stop is called, the channel closes, or a protocol
-// fatal error occurs. Use Wait to wait for the peer to exit and report its
-// status.
+// Call [Peer.Start] with a channel to start the service routine for the peer.
+// Once started, a peer runs until [Peer.Stop] is called, the channel closes,
+// or a protocol fatal error occurs. Use [Peer.Wait] to wait for the peer to
+// exit and report its status.
 //
 // Calling Stop terminates all method handlers and calls currently executing.
 //
-// Call Handle to add handlers to the local peer.  Use Call to invoke a call on
-// the remote peer. Both of these methods are safe for concurrent use by
-// multiple goroutines.
+// Call [Peer.Handle] to add handlers to the local peer.  Use [Peer.Call] to
+// invoke a call on the remote peer. Both of these methods are safe for
+// concurrent use by multiple goroutines.
 type Peer struct {
 	in  interface{ Recv() (*Packet, error) }
 	out struct {
@@ -100,7 +100,7 @@ func NewPeer() *Peer { return new(Peer) }
 
 // Start starts the peer running on the given channel. The peer runs until the
 // channel closes or a protocol fatal error occurs. Start does not block; call
-// Wait to wait for the peer to exit and report its status.
+// [Peer.Wait] to wait for the peer to exit and report its status.
 func (p *Peer) Start(ch Channel) *Peer {
 	if p.in != nil {
 		panic("peer is already started")
@@ -218,9 +218,9 @@ func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
 // blocks until ctx ends or until the response is received. If ctx ends before
 // the peer replies, the call will be automatically cancelled.
 //
-// In case of any error, Call returns a nil *Response. The concrete type of the
-// error value is *CallError, and if the error came from the remote peer the
-// corresponding response can be recovered from its Response field.
+// In case of any error, Call returns a nil [*Response]. The concrete type of
+// the error value is [*CallError], and if the error came from the remote peer
+// the corresponding response can be recovered from its Response field.
 func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Response, err error) {
 	peerMetrics.callOut.Add(1)
 	defer func() {
@@ -327,7 +327,7 @@ func (p *Peer) Exec(ctx context.Context, method string, data []byte) ([]byte, er
 }
 
 // Handle registers a handler for the specified method name. It is safe to call
-// this while the peer is running. Passing a nil Handler removes any handler
+// this while the peer is running. Passing a nil [Handler] removes any handler
 // for the specified method. Handle returns p to permit chaining.
 //
 // As a special case, if method == "" the handler is called for any request
@@ -701,9 +701,9 @@ func (p pending) deliverLocked(r *Response) {
 
 func callError(err error) *CallError { return &CallError{Err: err} }
 
-// CallError is the concrete type of errors reported by the Call method of a
-// Peer. For service errors, the Err field is nil and the ErrorData contains
-// the error details. For errors arising from a response, the Response field
+// CallError is the concrete type of errors reported by the [Peer.Call] method.
+// For service errors, the Err field is nil and the [ErrorData] contains the
+// error details. For errors arising from a response, the Response field
 // contains the complete response message.
 type CallError struct {
 	ErrorData
@@ -726,7 +726,7 @@ func (c *CallError) Error() string {
 
 type peerContextKey struct{}
 
-// ContextPeer returns the Peer associated with the given context, or nil if
+// ContextPeer returns the [Peer] associated with the given context, or nil if
 // none is defined.  The context passed to a method Handler has this value.
 func ContextPeer(ctx context.Context) *Peer {
 	if v := ctx.Value(peerContextKey{}); v != nil {

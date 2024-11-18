@@ -11,8 +11,8 @@
 //
 // # Peers
 //
-// The core type defined by this package is the Peer. Peers can simultaneously
-// initiate and and service calls with another peer over a Channel.
+// The core type defined by this package is the [Peer]. Peers concurrently
+// initiate and and service calls with another peer over a [Channel].
 //
 // To create a new, unstarted peer:
 //
@@ -23,9 +23,9 @@
 //
 //	p.Start(ch)
 //
-// The peer runs until its Stop method is called, the channel is closed by the
-// remote peer, or a protocol fatal error occurs. Call Wait to wait for the
-// peer to exit an return its status:
+// The peer runs until [Peer.Stop] is called, the channel is closed by the
+// remote peer, or a protocol fatal error occurs. Call [Peer.Wait] to wait for
+// the peer to exit an return its status:
 //
 //	if err := p.Wait(); err != nil {
 //	   log.Fatalf("Peer failed: %v", err)
@@ -33,7 +33,7 @@
 //
 // # Channels
 //
-// The Channel interface defines the ability to send and receive packets as
+// The [Channel] interface defines the ability to send and receive packets as
 // defined by the Chirp specification. A Channel implementation must allow
 // concurrent use by one sender and one receiver.
 //
@@ -46,8 +46,8 @@
 // between peers.  The peer that initiates the call is the caller, the peer
 // that responds is the callee. Calls may propagate in either direction.
 //
-// To define method handlers for inbound calls on the peer, use the Handle
-// method to register a handler for the method ID:
+// To define method handlers for inbound calls on the peer, use the
+// [Peer.Handle] method to register a handler for the method ID:
 //
 //	func echo(ctx context.Context, req *chirp.Request) ([]byte, error) {
 //	   return req.Data, nil
@@ -55,16 +55,16 @@
 //
 //	p.Handle("do-a-thing", echo)
 //
-// To issue a call to the remote peer, use the Call method:
+// To issue a call to the remote peer, use the [Peer.Call] method:
 //
 //	rsp, err := p.Call(ctx, "do-a-thing", []byte("some data"))
 //	if err != nil {
 //	   log.Fatalf("Call failed: %v", err)
 //	}
 //
-// Errors returned by p.Call have concrete type *chirp.CallError.
+// Errors returned by p.Call have concrete type [*chirp.CallError].
 //
-// To call a method directly on the local peer, use the Exec method:
+// To call a method directly on the local peer, use the [Peer.Exec] method:
 //
 //	rsp, err := p.Exec(ctx, "do-a-thing", []byte("some data"))
 //	if err != nil {
@@ -76,10 +76,11 @@
 //
 // # Custom Packet Handlers
 //
-// To handle packet types other than Request, Response, and Cancel, the caller
-// can use the SendPacket and HandlePacket methods of the Peer. SendPacket
-// allows the caller to send an arbitrary packet to the peer. Peers that do not
-// understand a packet type will silently discard it (per the spec).
+// To handle packet types other than [Request], [Response], and [Cancel], the
+// caller can use the [Peer.SendPacket] and [Peer.HandlePacket] methods
+// SendPacket allows the caller to send an arbitrary packet to the peer. Peers
+// that do not understand a packet type will silently discard it (per the
+// spec).
 //
 // HandlePacket registers a callback that will be invoked when a packet is
 // received matching the specified type. If the callback reports an error or

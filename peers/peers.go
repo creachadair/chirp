@@ -76,7 +76,7 @@ func Loop(ctx context.Context, acc Accepter, newPeer func() *chirp.Peer) error {
 	}
 }
 
-// NetAccepter adapts a net.Listener to the Accepter interface.
+// NetAccepter adapts a [net.Listener] to the [Accepter] interface.
 func NetAccepter(lst net.Listener) Accepter {
 	return netAccepter{Listener: lst}
 }

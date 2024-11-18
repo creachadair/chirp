@@ -27,14 +27,14 @@ type direct struct {
 	b2a <-chan *chirp.Packet
 }
 
-// Send implements a method of the chirp.Channel interface.
+// Send implements a method of the [chirp.Channel] interface.
 func (d direct) Send(pkt *chirp.Packet) (err error) {
 	defer safeClose(&err)
 	d.a2b <- pkt
 	return nil
 }
 
-// Recv implements a method of the chirp.Channel interface.
+// Recv implements a method of the [chirp.Channel] interface.
 func (d direct) Recv() (*chirp.Packet, error) {
 	pkt, ok := <-d.b2a
 	if !ok {
@@ -43,7 +43,7 @@ func (d direct) Recv() (*chirp.Packet, error) {
 	return pkt, nil
 }
 
-// Close implements a method of the chirp.Channel interface.
+// Close implements a method of the [chirp.Channel] interface.
 func (d direct) Close() (err error) {
 	defer safeClose(&err)
 	close(d.a2b)
@@ -69,7 +69,7 @@ type IOChannel struct {
 	c io.Closer
 }
 
-// Send implements a method of the chirp.Channel interface.
+// Send implements a method of the [chirp.Channel] interface.
 func (c IOChannel) Send(pkt *chirp.Packet) error {
 	if _, err := pkt.WriteTo(c.w); err != nil {
 		return err
@@ -77,7 +77,7 @@ func (c IOChannel) Send(pkt *chirp.Packet) error {
 	return c.w.Flush()
 }
 
-// Recv implements a method of the chirp.Channel interface.
+// Recv implements a method of the [chirp.Channel] interface.
 func (c IOChannel) Recv() (*chirp.Packet, error) {
 	var pkt chirp.Packet
 	if _, err := pkt.ReadFrom(c.r); err != nil {
@@ -86,5 +86,5 @@ func (c IOChannel) Recv() (*chirp.Packet, error) {
 	return &pkt, nil
 }
 
-// Close implements a method of the chirp.Channel interface.
+// Close implements a method of the [chirp.Channel] interface.
 func (c IOChannel) Close() error { return c.c.Close() }
