@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -954,6 +955,14 @@ func TestClone(t *testing.T) {
 	})
 	loc.A.HandlePacket(ptype, func(context.Context, *chirp.Packet) error { defer pg.Done(); acount++; return nil })
 
+	var logCalls atomic.Int32
+	checkLogs := func(want int) {
+		if got := logCalls.Load(); got != int32(want) {
+			t.Errorf("Log calls: got %d, want %d", got, want)
+		}
+	}
+	loc.A.LogPackets(func(*chirp.Packet, chirp.PacketDir) { logCalls.Add(1) })
+
 	cp := loc.A.Clone()
 	cp.Handle("mirror", func(context.Context, *chirp.Request) ([]byte, error) { return []byte("y"), nil })
 
@@ -964,8 +973,12 @@ func TestClone(t *testing.T) {
 	defer cc.Stop()
 
 	// Both A and its clone should respond to "test".
+	// Make sure both share the same packet logger.
+	checkLogs(0)
 	checkCall(loc.B, "test", "x")
+	checkLogs(2)
 	checkCall(cc, "test", "x")
+	checkLogs(4)
 
 	// The clone has a handler for "mirror" but A does not.
 	checkCall(cc, "mirror", "y")

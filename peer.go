@@ -143,14 +143,15 @@ func (p *Peer) Start(ch Channel) *Peer {
 func (p *Peer) Metrics() *expvar.Map { return peerMetrics.emap }
 
 // Clone returns a new unstarted peer that has the same method handlers, packet
-// handlers, and base context function as p.  After cloning, further changes to
-// either peer do not affect the other.
+// handlers, logger, and base context function as p.  After cloning, further
+// changes to either peer do not affect the other.
 func (p *Peer) Clone() *Peer {
 	p.μ.Lock()
 	defer p.μ.Unlock()
 	return &Peer{
 		imux: maps.Clone(p.imux),
 		pmux: maps.Clone(p.pmux),
+		plog: p.plog,
 		base: p.base,
 	}
 }
