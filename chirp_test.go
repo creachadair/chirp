@@ -178,6 +178,9 @@ func TestWildcard(t *testing.T) {
 
 	loc.A.
 		Handle("", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			if req.Method == "hidden" {
+				return nil, chirp.ErrUnknownMethod
+			}
 			return []byte("wildcard"), nil
 		}).
 		Handle("1", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
@@ -187,6 +190,7 @@ func TestWildcard(t *testing.T) {
 	call("", "wildcard", false)
 	call("1", "designated", false)
 	call("2", "wildcard", false)
+	call("hidden", "?", true)
 
 	// Unregister the wildcard handler and try again.
 	loc.A.Handle("", nil)
@@ -194,6 +198,7 @@ func TestWildcard(t *testing.T) {
 	call("", "", true)
 	call("1", "designated", false)
 	call("2", "?", true)
+	call("hidden", "?", true) // still fails
 }
 
 func TestCancellation(t *testing.T) {

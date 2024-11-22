@@ -297,6 +297,11 @@ func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Respons
 // result code reported for the error.
 type resultCoder interface{ ResultCode() ResultCode }
 
+// ErrUnknownMethod is a sentinel error that a [Handler] may return to cause
+// the call to report an unknown method error. This is intended for use in
+// wildcard handlers (see [Handle]), although any handler may return it.
+var ErrUnknownMethod errUnknownMethod
+
 // errUnknownMethod is an internal sentinel used to signal an unknown method in
 // the Exec method. It is recognized by the dispatch plumbing so that a handler
 // reporting it will behave as if no handler was found.
