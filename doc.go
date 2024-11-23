@@ -1,6 +1,6 @@
 // Copyright (C) 2022 Michael J. Fromberger. All Rights Reserved.
 
-// Package chirp implements the Chirp v0 protocol.
+// Package chirp implements the [Chirp v0] protocol.
 //
 // Chirp is a lightweight remote procedure call protocol. Peers exchange binary
 // packets over a shared reliable channel.  The protocol is intended to be easy
@@ -85,4 +85,6 @@
 // HandlePacket registers a callback that will be invoked when a packet is
 // received matching the specified type. If the callback reports an error or
 // panics, it is treated as protocol fatal.
+//
+// [Chirp v0]: https://github.com/creachadair/chirp/blob/main/spec.md
 package chirp
