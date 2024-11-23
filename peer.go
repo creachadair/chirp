@@ -299,7 +299,7 @@ type resultCoder interface{ ResultCode() ResultCode }
 
 // ErrUnknownMethod is a sentinel error that a [Handler] may return to cause
 // the call to report an unknown method error. This is intended for use in
-// wildcard handlers (see [Handle]), although any handler may return it.
+// wildcard handlers (see [Peer.Handle]), although any handler may return it.
 var ErrUnknownMethod errUnknownMethod
 
 // errUnknownMethod is an internal sentinel used to signal an unknown method in
