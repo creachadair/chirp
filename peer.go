@@ -35,7 +35,7 @@ type Channel interface {
 }
 
 // A Handler processes a request from the remote peer.  A handler can obtain
-// the peer from its context argument using the ContextPeer helper.
+// the peer from its context argument using the [ContextPeer] helper.
 //
 // By default, the error reported by a handler is returned to the caller with
 // error code 0 and the text of the error as its message. A handler may return
@@ -69,7 +69,8 @@ const (
 // or a protocol fatal error occurs. Use [Peer.Wait] to wait for the peer to
 // exit and report its status.
 //
-// Calling Stop terminates all method handlers and calls currently executing.
+// Calling [Peer.Stop] terminates all method handlers and outbound calls
+// currently executing.
 //
 // Call [Peer.Handle] to add handlers to the local peer.  Use [Peer.Call] to
 // invoke a call on the remote peer. Both of these methods are safe for
@@ -338,7 +339,7 @@ func (p *Peer) Exec(ctx context.Context, method string, data []byte) ([]byte, er
 //
 // As a special case, if method == "" the handler is called for any request
 // with a method name that does not have a more specific handler registered.
-// If len(method) > MaxMethodLen, Handle will panic.
+// If len(method) > [MaxMethodLen], Handle will panic.
 func (p *Peer) Handle(method string, handler Handler) *Peer {
 	if len(method) > MaxMethodLen {
 		panic(fmt.Sprintf("method %q name too long (%d bytes > %d)", method, len(method), MaxMethodLen))
