@@ -404,7 +404,7 @@ func TestProtocolFatal(t *testing.T) {
 		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'C', 'X', 0, 2, 0, 0, 0, 0})
+		tw.Write([]byte{'*', '?', 0, 2, 0, 0, 0, 0})
 		mustErr(t, p.Wait(), "invalid protocol magic")
 	})
 
@@ -413,7 +413,7 @@ func TestProtocolFatal(t *testing.T) {
 		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'C', 'P', 0, 2, 0, 0})
+		tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0})
 		tw.Close()
 		mustErr(t, p.Wait(), "short packet header")
 	})
@@ -423,7 +423,7 @@ func TestProtocolFatal(t *testing.T) {
 		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'C', 'P', 0, 2, 0, 0, 0, 10, 'a', 'b', 'c', 'd'})
+		tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0, 0, 10, 'a', 'b', 'c', 'd'})
 		tw.Close()
 		mustErr(t, p.Wait(), "short payload")
 	})
@@ -433,7 +433,7 @@ func TestProtocolFatal(t *testing.T) {
 		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'C', 'P', 0, 2, 0, 0, 0, 1, 'X'})
+		tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0, 0, 1, 'X'})
 		mustErr(t, p.Wait(), "short request payload")
 	})
 
@@ -572,6 +572,16 @@ func TestProtocolVersion(t *testing.T) {
 			Method:    "foo",
 			Data:      []byte("hello"),
 		}.Encode(),
+	}
+	const encoded = "" +
+		"\xc7\x63" + // magic + protocol(99)
+		"\x00\x02" + // packet type: request
+		"\x00\x00\x00\x0d" + // payload length (13)
+		"\x00\x00\x30\x39" + // request ID 12345
+		"\x03foo" + // method name
+		"hello" // data
+	if got := string(want.Encode()); got != encoded {
+		t.Errorf("Packet encoding:\ngot:  %q\nwant: %q", got, encoded)
 	}
 
 	ac, bc := channel.Direct()

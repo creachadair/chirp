@@ -22,7 +22,8 @@ type Packet struct {
 // Encode encodes p in binary format.
 func (p Packet) Encode() []byte {
 	buf := make([]byte, 8+len(p.Payload))
-	buf[0], buf[1], buf[2], buf[3] = 'C', 'P', p.Protocol, byte(p.Type)
+	buf[0], buf[1] = '\xc7', p.Protocol // magic + protocol
+	buf[2], buf[3] = byte(p.Type>>8), byte(p.Type&0xff)
 	binary.BigEndian.PutUint32(buf[4:], uint32(len(p.Payload)))
 	copy(buf[8:], p.Payload)
 	return buf
@@ -41,12 +42,11 @@ func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return int64(nr), fmt.Errorf("short packet header: %w", err)
 	}
-	if p := string(buf[:2]); p != "CP" {
-		return int64(nr), fmt.Errorf("invalid protocol magic %q", p)
+	if buf[0] != '\xc7' {
+		return int64(nr), fmt.Errorf("invalid protocol magic '%02x'", buf[0])
 	}
-
-	p.Protocol = buf[2]
-	p.Type = PacketType(buf[3])
+	p.Protocol = buf[1]
+	p.Type = PacketType(uint16(buf[2])*256 + uint16(buf[3]))
 
 	if psize := binary.BigEndian.Uint32(buf[4:]); psize > 0 {
 		p.Payload = make([]byte, int(psize))
@@ -90,9 +90,9 @@ func (p *Packet) String() string {
 // PacketType describes the structure type of a Chirp v0 packet.
 //
 // All packet type values from 0 to 127 inclusive are reserved by the protocol
-// and MUST NOT be used for any other purpose. Packet type values from 128-255
-// are reserved for use by the implementation.
-type PacketType byte
+// and MUST NOT be used for any other purpose. Packet type values from 128 to
+// 65535 are reserved for use by the implementation.
+type PacketType uint16
 
 const (
 	PacketRequest  PacketType = 2 // The initial request for a call

@@ -28,8 +28,8 @@ A packet is an array of bytes with the following structure:
 
 | Offset | Bytes | Description                     |
 |--------|-------|---------------------------------|
-| 0      | 3     | "CP\x00" [67, 80, 0]            |
-| 3      | 1     | packet type                     |
+| 0      | 2     | "\xc7\x00" [199, 0]             |
+| 2      | 2     | packet type                     |
 | 4      | 4     | size of payload (BE uint32 = n) |
 | 8      | n     | payload                         |
 
@@ -132,7 +132,7 @@ The payload of a Cancel packet has the following structure:
 
 ## Protocol Definition
 
-The current protocol is Version 0, indicated by the packet header `CP\x00`.
+The current protocol is Version 0, indicated by the packet header `\xc7\x00`.
 
 An implementation of the protocol consists of two components:
 
