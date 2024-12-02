@@ -39,16 +39,16 @@ A minimal packet is 8 bytes, consisting of the magic number, packet type, and 4-
 
 ### Packet Type
 
-All packet type values from 0 to 127 inclusive are reserved by the protocol and MUST NOT be used for any other purpose. Packet type values from 128–255 are reserved for use by the implementation.
+All packet type values from 0 to 127 inclusive are reserved by the protocol and MUST NOT be used for any other purpose. Packet type values from 128–65535 are reserved for use by the implementation.
 
-| Value   | Description                   | Payload format                |
-|---------|-------------------------------|-------------------------------|
-| 0-1     | (reserved by protocol)        |                               |
-| 2       | Request                       | [Request](#request-payload)   |
-| 3       | Cancel request                | [Cancel](#cancel-payload)     |
-| 4       | Response                      | [Response](#response-payload) |
-| 5-127   | (reserved by protocol)        |                               |
-| 128-255 | (reserved for implementation) | implementation-defined        |
+| Value     | Description                   | Payload format                |
+|-----------|-------------------------------|-------------------------------|
+| 0-1       | (reserved by protocol)        |                               |
+| 2         | Request                       | [Request](#request-payload)   |
+| 3         | Cancel request                | [Cancel](#cancel-payload)     |
+| 4         | Response                      | [Response](#response-payload) |
+| 5-127     | (reserved by protocol)        |                               |
+| 128-65535 | (reserved for implementation) | implementation-defined        |
 
 ### Request Payload
 
@@ -244,6 +244,6 @@ After sending a `Cancel(id)` packet to the callee, the caller peer MAY return co
 
 ### Custom Subprotocols
 
-Packet type values from 128-255 are reserved for use by the implementation. An implementation is permitted to send and accept packets with types in this custom range to define other subprotocols. Apart from the basic packet structure, the semantics of custom packet types are entirely up to the implementation.
+Packet type values from 128-65535 are reserved for use by the implementation. An implementation is permitted to send and accept packets with types in this custom range to define other subprotocols. Apart from the basic packet structure, the semantics of custom packet types are entirely up to the implementation.
 
 Because a peer that does not recognize the type of a structurally valid packet is required to ignore the packet, peers may need to advertise or negotiate capabilities for custom subprotocols.  The default [call subprotocol](#call-subprotocol) should be used for this purpose.
