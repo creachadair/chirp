@@ -35,6 +35,8 @@ A packet is an array of bytes with the following structure:
 
 A minimal packet is 8 bytes, consisting of the magic number, packet type, and 4-byte payload size with an empty payload.
 
+The second byte of the magic number is zero ("\x00") denoting protocol v0.
+
 **Implementation note:** A packet is designed to be self-framing, in that once the header is read the exact length of the payload is known and can be consumed. This permits packets to be sent and received over unframed binary streams such as pipes and sockets, or packed into files.
 
 ### Packet Type
