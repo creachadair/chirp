@@ -462,6 +462,9 @@ func (p *Peer) sendReq(method string, data []byte) (uint32, pending, error) {
 	if err := p.err; err != nil {
 		p.μ.Unlock()
 		return 0, nil, err
+	} else if p.ocall == nil {
+		p.μ.Unlock()
+		panic("peer is not started")
 	}
 	p.nexto++
 	id := p.nexto
@@ -678,6 +681,9 @@ func (p *Peer) releaseIDLocked(id uint32) {
 func (p *Peer) sendOut(pkt *Packet) error {
 	p.out.Lock()
 	defer p.out.Unlock()
+	if p.out.ch == nil {
+		panic("peer is not started")
+	}
 	peerMetrics.packetSent.Add(1)
 	p.logPacket(pkt, Send)
 	return p.out.ch.Send(pkt)

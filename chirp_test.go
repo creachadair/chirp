@@ -934,6 +934,32 @@ func TestRegression(t *testing.T) {
 			t.Logf("Decoding ErrorData: got expected error: %v", err)
 		}
 	})
+
+	t.Run("UnstartedPeer", func(t *testing.T) {
+		ctx := context.Background()
+		p := chirp.NewPeer().Handle("hi", func(context.Context, *chirp.Request) ([]byte, error) {
+			panic("this should not be reached")
+		})
+		const message = "peer is not started"
+
+		check := func(t *testing.T, val any) {
+			if got, ok := val.(string); !ok {
+				t.Errorf("Panic reported %q, want %q", val, message)
+			} else if got != message {
+				t.Errorf("Panic message: got %q, want %q", got, message)
+			}
+		}
+		t.Run("Call", func(t *testing.T) {
+			pval := mtest.MustPanicf(t, func() { p.Call(ctx, "hi", nil) },
+				"call to unstarted peer should panic")
+			check(t, pval)
+		})
+		t.Run("SendPacket", func(t *testing.T) {
+			pval := mtest.MustPanicf(t, func() { p.SendPacket(100, []byte("hi")) },
+				"send to unstarted peer should panic")
+			check(t, pval)
+		})
+	})
 }
 
 func TestClone(t *testing.T) {
