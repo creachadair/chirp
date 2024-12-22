@@ -10,6 +10,7 @@ import (
 	"io"
 	"maps"
 	"net"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -558,7 +559,10 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 			// Ensure a panic out of the handler is turned into a graceful response.
 			defer func() {
 				if x := recover(); x != nil {
-					err = fmt.Errorf("handler panicked (recovered): %v", x)
+					err = ErrorData{
+						Message: fmt.Sprintf("handler panicked (recovered): %v", x),
+						Data:    debug.Stack(),
+					}
 				}
 			}()
 			return handler(ctx, req)

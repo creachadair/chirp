@@ -19,6 +19,7 @@ import (
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/chirp/peers"
+	"github.com/creachadair/mds/mstr"
 	"github.com/creachadair/mds/mtest"
 	"github.com/creachadair/taskgroup"
 	"github.com/fortytw2/leaktest"
@@ -1045,4 +1046,35 @@ func TestClone(t *testing.T) {
 	if acount != 3 || ccount != 1 {
 		t.Errorf("After send: got %d, %d; want %d, %d", acount, ccount, 3, 1)
 	}
+}
+
+func TestHandlerPanic(t *testing.T) {
+	defer leaktest.Check(t)()
+
+	ctx := context.Background()
+	loc := peers.NewLocal()
+	defer loc.Stop()
+
+	const failure = "the handler did the bad"
+	loc.A.Handle("panic", func(context.Context, *chirp.Request) ([]byte, error) {
+		panic(failure)
+	})
+
+	rsp, err := loc.B.Call(ctx, "panic", nil)
+	if err == nil {
+		t.Fatalf("Call panic: got %+v, want error", rsp)
+	}
+	var ce *chirp.CallError
+	if !errors.As(err, &ce) {
+		t.Errorf("Error %[1]T is not a CallError: %[1]v", err)
+	} else if len(ce.Data) == 0 {
+		t.Error("Error does not contain a call stack")
+	} else {
+		t.Logf("Got %d bytes of call stack (as desired):\n%s ...",
+			len(ce.Data), mstr.Trunc(string(ce.Data), 256))
+	}
+	if !strings.Contains(err.Error(), failure) {
+		t.Errorf("Error does not contain %q: %v", failure, err)
+	}
+
 }
