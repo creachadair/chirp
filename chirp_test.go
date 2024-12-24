@@ -318,6 +318,18 @@ func TestPeerExec(t *testing.T) {
 			t.Errorf("Call 3: response is %v, want nil", rsp)
 		}
 	})
+	t.Run("HasContextPeer", func(t *testing.T) {
+		loc.B.Handle("?", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+			return parseTestSpec(ctx, "peer?")
+		})
+		rsp, err := loc.B.Exec(context.Background(), "?", nil)
+		if err != nil {
+			t.Fatalf("Exec probe: unexpected error: %v", err)
+		}
+		if got := string(rsp); got != "present" {
+			t.Errorf("Exec probe: got %q, want present", got)
+		}
+	})
 }
 
 func TestSlowCancellation(t *testing.T) {
