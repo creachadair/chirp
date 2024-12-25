@@ -331,6 +331,9 @@ func (p *Peer) Exec(ctx context.Context, method string, data []byte) ([]byte, er
 	if !ok {
 		return nil, errUnknownMethod{}
 	}
+	if ContextPeer(ctx) == nil {
+		ctx = context.WithValue(ctx, peerContextKey{}, p)
+	}
 	return handler(ctx, &Request{Method: method, Data: data})
 }
 
