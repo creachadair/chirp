@@ -231,9 +231,11 @@ func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Respons
 			peerMetrics.callOutErr.Add(1)
 		}
 	}()
-
 	if len(method) > MaxMethodLen {
 		return nil, callError(fmt.Errorf("method %q name too long (%d bytes > %d)", method, len(method), MaxMethodLen))
+	}
+	if isLocalExec(ctx) {
+		return p.callLocal(ctx, method, data)
 	}
 	id, pc, err := p.sendReq(method, data)
 	if err != nil {
@@ -273,9 +275,10 @@ func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Respons
 
 		case rsp, ok := <-pc:
 			if ok {
-				if rsp.Code == CodeSuccess {
+				switch rsp.Code {
+				case CodeSuccess:
 					return rsp, nil
-				} else if rsp.Code == CodeCanceled {
+				case CodeCanceled:
 					return nil, &CallError{Err: context.Canceled, Response: rsp}
 				}
 				ce := &CallError{Response: rsp}
@@ -325,16 +328,14 @@ var errPeerCancel = errors.New("peer canceled request")
 // empty result; otherwise it returns the result of calling the handler with
 // the given data.
 func (p *Peer) Exec(ctx context.Context, method string, data []byte) ([]byte, error) {
-	p.μ.Lock()
-	handler, ok := p.imux[method]
-	p.μ.Unlock()
-	if !ok {
-		return nil, errUnknownMethod{}
-	}
 	if ContextPeer(ctx) == nil {
 		ctx = context.WithValue(ctx, peerContextKey{}, p)
 	}
-	return handler(ctx, &Request{Method: method, Data: data})
+	rsp, err := p.Call(context.WithValue(ctx, execContextKey{}, true), method, data)
+	if err != nil {
+		return nil, err
+	}
+	return rsp.Data, nil
 }
 
 // Handle registers a handler for the specified method name. It is safe to call
@@ -454,6 +455,64 @@ func (p *Peer) sendRsp(rsp *Response) {
 	}); err != nil {
 		p.closeOut()
 	}
+}
+
+// callLocal invokes a method handler defined on p itself, rather than
+// forwarding it to the remote peer.
+//
+// Unlike a regular peer Call, local calls dispatch directly to the assigned
+// handler, and do not send messages over the channel or acquire request IDs.
+func (p *Peer) callLocal(ctx context.Context, method string, data []byte) (*Response, error) {
+	handler, err := func() (Handler, error) {
+		p.μ.Lock()
+		defer p.μ.Unlock()
+		if err := p.err; err != nil {
+			return nil, err
+		}
+		handler, ok := p.imux[method]
+		if !ok {
+			const wildcardID = ""
+			handler, ok = p.imux[wildcardID]
+			if !ok {
+				return nil, errUnknownMethod{}
+			}
+		}
+		return handler, nil
+	}()
+	if rc, ok := err.(resultCoder); ok { // most likely errUnkownMethod, see above
+		return nil, &CallError{Response: &Response{Code: rc.ResultCode()}}
+	} else if err != nil {
+		return nil, callError(err)
+	}
+
+	peerMetrics.callPending.Add(1)
+	defer peerMetrics.callPending.Add(-1)
+	result, err := handler(ctx, &Request{
+		Method: method,
+		Data:   data,
+	})
+	if err != nil {
+		// Propagate context cancellation as a local error, rather than
+		// decorating it as a response from the remote peer, so the caller can
+		// check for it in the usual way.
+		if ctx.Err() != nil {
+			return nil, callError(ctx.Err())
+		}
+		if ce := (*CallError)(nil); errors.As(err, &ce) {
+			return nil, err
+		}
+
+		ce := &CallError{Response: &Response{Code: CodeServiceError}}
+		if ed, ok := err.(*ErrorData); ok {
+			ce.ErrorData = *ed
+		} else if ed, ok := err.(ErrorData); ok {
+			ce.ErrorData = ed
+		} else {
+			ce.ErrorData = ErrorData{Message: err.Error()}
+		}
+		return nil, ce
+	}
+	return &Response{Code: CodeSuccess, Data: result}, nil
 }
 
 // sendReq sends a request packet for the given method and data.
@@ -588,6 +647,11 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		} else if ed, ok := err.(ErrorData); ok {
 			rsp.Code = CodeServiceError
 			rsp.Data = ed.Encode()
+		} else if ce := (*CallError)(nil); errors.As(err, &ce) && ce.Response != nil {
+			// This may occur if we are handling an outbound call on behalf of a
+			// local caller via Exec.
+			rsp.Code = ce.Response.Code
+			rsp.Data = ce.ErrorData.Encode()
 		} else {
 			rsp.Code = CodeServiceError
 			rsp.Data = ErrorData{Message: err.Error()}.Encode()
@@ -753,6 +817,15 @@ func ContextPeer(ctx context.Context) *Peer {
 		return v.(*Peer)
 	}
 	return nil
+}
+
+type execContextKey struct{}
+
+func isLocalExec(ctx context.Context) bool {
+	if isLocal, ok := ctx.Value(execContextKey{}).(bool); ok {
+		return isLocal
+	}
+	return false
 }
 
 // SplitAddress parses an address string to guess a network type and target.
