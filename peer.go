@@ -463,33 +463,33 @@ func (p *Peer) sendRsp(rsp *Response) {
 func (p *Peer) sendReq(method string, data []byte) (uint32, pending, error) {
 	// Phase 1: Check for fatal errors and acquire state.
 	p.μ.Lock()
+	defer p.μ.Unlock()
 	if err := p.err; err != nil {
-		p.μ.Unlock()
 		return 0, nil, err
 	} else if p.ocall == nil {
-		p.μ.Unlock()
 		panic("peer is not started")
 	}
 	p.nexto++
 	id := p.nexto
 	pc := make(pending, 1)
 	p.ocall[id] = pc
-	p.μ.Unlock()
 
 	// Send the request to the remote peer. Note we MUST NOT hold the state lock
 	// while doing this, as that will block the receiver from dispatching packets.
-	err := p.sendOut(&Packet{
-		Type: PacketRequest,
-		Payload: Request{
-			RequestID: id,
-			Method:    method,
-			Data:      data,
-		}.Encode(),
-	})
+	p.μ.Unlock()
+	err := func() error {
+		defer p.μ.Lock()
+		return p.sendOut(&Packet{
+			Type: PacketRequest,
+			Payload: Request{
+				RequestID: id,
+				Method:    method,
+				Data:      data,
+			}.Encode(),
+		})
+	}()
 
 	// Phase 2: Check for an error in the send, and update state if it failed.
-	p.μ.Lock()
-	defer p.μ.Unlock()
 	if err != nil {
 		p.releaseIDLocked(id)
 		return 0, nil, err
