@@ -273,52 +273,66 @@ func TestPeerExec(t *testing.T) {
 	loc.A.
 		LogPackets(logPacket(t, "Peer A")).
 		Handle("1", func(context.Context, *chirp.Request) ([]byte, error) {
-			t.Log("handler: method 1")
+			t.Log("handler: method 1 (makes no additional calls)")
 			return []byte("ok"), nil
 		}).
 		Handle("2", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
-			t.Log("handler: method 2")
-			// Forward the request to method 1 handler, should succeed.
-			return chirp.ContextPeer(ctx).Exec(ctx, "1", req.Data)
+			t.Log("handler: method 2 (calls method 1)")
+			rsp, err := chirp.ContextPeer(ctx).Call(ctx, "1", req.Data)
+			if err != nil {
+				return nil, err
+			}
+			return rsp.Data, nil
 		}).
 		Handle("3", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
-			t.Log("handler: method 3")
+			t.Log("handler: method 3 (calls non-existent method 1000)")
 			// Forward the request to method 1000 handler, should fail.
 			// The data reported by this handler should not be seen by the caller.
-			_, err := chirp.ContextPeer(ctx).Exec(ctx, "1000", req.Data)
+			_, err := chirp.ContextPeer(ctx).Call(ctx, "1000", req.Data)
 			return []byte("unseen"), err
 		}).
 		Handle("4", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
-			t.Log("handler: method 4")
+			t.Log("handler: method 4 (execs method 2)")
 			// Forward the request to method 2 handler, which should forward it to 1.
 			return chirp.ContextPeer(ctx).Exec(ctx, "2", req.Data)
 		})
 
 	ctx := context.Background()
-	for _, mid := range []string{"2", "4"} {
-		t.Run(fmt.Sprintf("Call%s", mid), func(t *testing.T) {
-			rsp, err := loc.B.Call(ctx, mid, nil)
-			if err != nil {
-				t.Errorf("Call %q: unexpected error: %v", mid, err)
-			}
-			if got, want := string(rsp.Data), "ok"; got != want {
-				t.Errorf("Call %q: got %q, want %q", mid, got, want)
-			}
-		})
-	}
-	t.Run("Call3", func(t *testing.T) {
-		rsp, err := loc.B.Call(ctx, "3", nil)
-		var cerr *chirp.CallError
-		if !errors.As(err, &cerr) {
-			t.Errorf("Call 3: got (%v, %v), want CallError", rsp, err)
-		} else if got := cerr.Response.Code; got != chirp.CodeUnknownMethod {
-			t.Errorf("Call 3: response code is %v, want %v", got, chirp.CodeUnknownMethod)
+	t.Run("A/Exec2", func(t *testing.T) {
+		// Verify that if we Exec on A, the Call from inside method 2 gets routed
+		// to A rather than to B.
+		rsp, err := loc.A.Exec(ctx, "2", nil)
+		if err != nil {
+			t.Fatalf("Exec 2: unexpected error: %v", err)
 		}
-		if rsp != nil {
-			t.Errorf("Call 3: response is %v, want nil", rsp)
+		if got, want := string(rsp), "ok"; got != want {
+			t.Errorf("Exec 2: got %q, want %q", got, want)
+		}
+	})
+	t.Run("A/Exec3", func(t *testing.T) {
+		// Verify that if we Exec on A, the UNKNOWN_METHOD error from its attempt
+		// to call a (non-existent) method on B is reported as such.
+		_, err := loc.A.Exec(ctx, "3", nil)
+		if ce := (*chirp.CallError)(nil); !errors.As(err, &ce) {
+			t.Fatalf("Exec 3: got error %[1]T (%[1]v), want CallError", err)
+		} else if ce.Response.Code != chirp.CodeUnknownMethod {
+			t.Errorf("Exec 3: got %v, want UNKNOWN_METHOD", ce)
+		}
+	})
+	t.Run("B/Call4", func(t *testing.T) {
+		// Verify that if we Call from B to A, then the Exec inside method 4 gets
+		// routed to A itself rather than back to B.
+		rsp, err := loc.B.Call(ctx, "4", nil)
+		if err != nil {
+			t.Errorf("Call 4: unexpected error: %v", err)
+		} else if got, want := string(rsp.Data), "ok"; got != want {
+			t.Errorf("Call 4: got %q, want %q", got, want)
 		}
 	})
 	t.Run("HasContextPeer", func(t *testing.T) {
+		// Verify that when we call a method from a top-level exec in the host,
+		// the context passed to the resulting local handler has the peer
+		// attached.
 		loc.B.Handle("?", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
 			return parseTestSpec(ctx, "peer?")
 		})
