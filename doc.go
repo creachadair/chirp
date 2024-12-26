@@ -80,7 +80,8 @@
 //	}
 //
 // Exec does not send any packets to the remote peer. If the method handler
-// invokes [Peer.Call], that call also invokes its target locally.
+// invokes [Peer.Call], that call also invokes its target locally. Errors
+// reported by p.Exec have concrete type [*chirp.CallError].
 //
 // # Custom Packet Handlers
 //
