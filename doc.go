@@ -64,15 +64,23 @@
 //
 // Errors returned by p.Call have concrete type [*chirp.CallError].
 //
-// To call a method directly on the local peer, use the [Peer.Exec] method:
+// # Callbacks
+//
+// A method handler may "call back" to methods of the remote peer. To do so,
+// the handler uses [ContextPeer] to obtain the local peer, and executes its
+// [Peer.Call] method. This behaves as any other call made by the local peer.
+//
+// # Local Calls
+//
+// To invoke a handler directly on the local peer, use [Peer.Exec]:
 //
 //	rsp, err := p.Exec(ctx, "do-a-thing", []byte("some data"))
 //	if err != nil {
 //	   log.Fatalf("Exec failed: %v", err)
 //	}
 //
-// Exec does not send any packets to the remote peer unless the method handler
-// does so internally.
+// Exec does not send any packets to the remote peer. If the method handler
+// invokes [Peer.Call], that call also invokes its target locally.
 //
 // # Custom Packet Handlers
 //
