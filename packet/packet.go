@@ -3,6 +3,8 @@
 // Package packet provides support for encoding and decoding binary packet data.
 package packet
 
+import "slices"
+
 // Vint30 is an unsigned 30-bit integer that uses a variable-width encoding
 // from 1 to 4 bytes.
 //
@@ -221,8 +223,9 @@ func (s Slice) EncodedLen() int {
 // It panics if any element of s cannot be encoded.
 // It returns buf unmodified if len(s) == 0.
 func (s Slice) Encode(buf []byte) []byte {
+	cur := slices.Grow(buf, s.EncodedLen())
 	for _, v := range s {
-		buf = v.Encode(buf)
+		cur = v.Encode(cur)
 	}
-	return buf
+	return cur
 }
