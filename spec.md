@@ -37,7 +37,7 @@ A minimal packet is 8 bytes, consisting of the magic number, packet type, and 4-
 
 The second byte of the magic number is zero ("\x00") denoting protocol v0.
 
-**Implementation note:** A packet is designed to be self-framing, in that once the header is read the exact length of the payload is known and can be consumed. This permits packets to be sent and received over unframed binary streams such as pipes and sockets, or packed into files.
+**Implementation note:** A packet is self-framing, in that once the header is read the exact length of the payload is known and can be consumed. This permits packets to be sent and received over unframed binary streams such as pipes and sockets, or packed into files.
 
 ### Packet Type
 
@@ -134,7 +134,7 @@ The payload of a Cancel packet has the following structure:
 
 ## Protocol Definition
 
-The current protocol is Version 0, indicated by the packet header `\xc7\x00`.
+The current protocol is Version 0, indicated by the packet header `\xc7\x00`. The second byte of the header is reserved for packet structure versioning.
 
 An implementation of the protocol consists of two components:
 
@@ -165,7 +165,7 @@ To **respond with error** means that the receiving peer MUST fully consume the p
 
 #### Protocol Fatal Conditions
 
-Channel failures, resource exhaustion, and fundamental errors in the protocol implementation are protocol fatal. A peer MUST **protocol fatal** for:
+Channel failures, resource exhaustion, and fundamental errors in the protocol implementation are protocol fatal. A peer MUST **fail protocol** for:
 
 - A channel failure while sending or receiving a packet.
 - Receiving a short or invalid packet header.
@@ -236,7 +236,7 @@ While a call `id` is *pending*, the caller may request its cancellation. To do s
 
   - Otherwise, once the handler completes, the callee MUST send an ordinary response for the request according to the rules above.
 
-- Otherwise (if the call handler has already completed), the callee SHOULD report its result as a normal response, completing the call. Alternatively, the callee MAY discard the result and send `Response(id, CANCELED, nil)` instead. Either of these actions terminates the call.
+- Otherwise (if the call handler has already completed), the callee SHOULD report its result as a normal response, completing the call. Alternatively, the callee MAY discard the result and send `Response(id, CANCELED, nil)` instead, terminating the call.
 
 If cancellation succeeds, the cancellation response supersedes a handler response. Whether or not cancellation succeeds, the callee MUST NOT send multiple responses for the same request.
 
