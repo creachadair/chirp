@@ -14,6 +14,7 @@ import (
 var (
 	_ packet.Encoder = packet.Vint30(0)
 	_ packet.Encoder = packet.Bytes(nil)
+	_ packet.Encoder = packet.MBytes(nil)
 	_ packet.Encoder = packet.Literal("")
 	_ packet.Encoder = packet.Bool(false)
 	_ packet.Encoder = packet.Raw(nil)
@@ -21,6 +22,7 @@ var (
 
 	_ packet.Decoder = (*packet.Vint30)(nil)
 	_ packet.Decoder = (*packet.Bytes)(nil)
+	_ packet.Decoder = (*packet.MBytes)(nil)
 	_ packet.Decoder = packet.Literal("")
 	_ packet.Decoder = (*packet.Bool)(nil)
 	_ packet.Decoder = (*packet.Raw)(nil)
@@ -272,4 +274,55 @@ func TestParse(t *testing.T) {
 	if diff := cmp.Diff(packet.Slice{b, v1, packet.Literal("OK"), v2}, want); diff != "" {
 		t.Errorf("Parse (-got, +want):\n%s", diff)
 	}
+}
+
+func TestMBytes(t *testing.T) {
+	tests := []struct {
+		input string
+		want  [][]byte
+		bad   bool
+	}{
+		{"", nil, false},
+		{"\x00", strs(""), false},
+		{"\x00\x00", strs("", ""), false},
+		{"\x14apple\x10pear\x10plum\x18cherry", strs("apple", "pear", "plum", "cherry"), false},
+		{"\x18athena\x00\x10asha\x00", strs("athena", "", "asha", ""), false},
+
+		{"\x03\x02", nil, true},     // invalid length
+		{"\x04", nil, true},         // valid length, short buffer
+		{"\x08x", nil, true},        // valid length, short buffer
+		{"\x04.\x04.--", nil, true}, // garbage after some good results
+	}
+	for _, tc := range tests {
+		var mb packet.MBytes
+
+		n := mb.Decode([]byte(tc.input))
+		if tc.bad {
+			if n >= 0 {
+				t.Errorf("Decode %q: got %d, %+v, want error", tc.input, n, mb)
+			}
+			continue
+		} else if n != len(tc.input) {
+			t.Errorf("Decode %q: got %d, want %d", tc.input, n, len(tc.input))
+			continue
+		}
+		if diff := cmp.Diff([][]byte(mb), tc.want); diff != "" {
+			t.Errorf("Decode %q (-got, +want):\n%s", tc.input, diff)
+		}
+
+		if rlen := mb.EncodedLen(); rlen != len(tc.input) {
+			t.Errorf("Round-trip len: got %d, want %d", rlen, len(tc.input))
+		}
+		rt := mb.Encode(nil)
+		if string(rt) != tc.input {
+			t.Errorf("Round-trip %q:\n got %q\nwant %q", tc.input, rt, tc.input)
+		}
+	}
+}
+
+func strs(ss ...string) (out [][]byte) {
+	for _, s := range ss {
+		out = append(out, []byte(s))
+	}
+	return
 }

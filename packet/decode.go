@@ -2,7 +2,9 @@
 
 package packet
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // A Decoder is a value that supports being decoded from binary form.
 type Decoder interface {
@@ -20,6 +22,22 @@ func (v *Vint30) Decode(buf []byte) int {
 	}
 	*v = z
 	return nb
+}
+
+// Decode implements the Decoder interface.
+func (m *MBytes) Decode(buf []byte) int {
+	*m = (*m)[:0]
+	var total int
+	for len(buf) != 0 {
+		nb, b := ParseBytes(buf)
+		if nb < 0 {
+			return -1
+		}
+		*m = append(*m, []byte(b))
+		buf = buf[nb:]
+		total += nb
+	}
+	return total
 }
 
 // Decode implements the Decoder interface.
