@@ -5,7 +5,7 @@ package chirp
 import "expvar"
 
 // peerMetrics record peer activity counters.
-var peerMetrics struct {
+type peerMetrics struct {
 	packetRecv    expvar.Int
 	packetSent    expvar.Int
 	packetDropped expvar.Int
@@ -20,19 +20,21 @@ var peerMetrics struct {
 	emap *expvar.Map
 }
 
+var rootMetrics peerMetrics
+
 func init() {
 	m := new(expvar.Map)
 
-	m.Set("packets_received", &peerMetrics.packetRecv)
-	m.Set("packets_sent", &peerMetrics.packetSent)
-	m.Set("packets_dropped", &peerMetrics.packetDropped)
-	m.Set("calls_in", &peerMetrics.callIn)
-	m.Set("calls_in_failed", &peerMetrics.callInErr)
-	m.Set("calls_active", &peerMetrics.callActive)
-	m.Set("calls_out", &peerMetrics.callOut)
-	m.Set("calls_out_failed", &peerMetrics.callOutErr)
-	m.Set("cancels_in", &peerMetrics.cancelIn)
-	m.Set("calls_pending", &peerMetrics.callPending)
+	m.Set("packets_received", &rootMetrics.packetRecv)
+	m.Set("packets_sent", &rootMetrics.packetSent)
+	m.Set("packets_dropped", &rootMetrics.packetDropped)
+	m.Set("calls_in", &rootMetrics.callIn)
+	m.Set("calls_in_failed", &rootMetrics.callInErr)
+	m.Set("calls_active", &rootMetrics.callActive)
+	m.Set("calls_out", &rootMetrics.callOut)
+	m.Set("calls_out_failed", &rootMetrics.callOutErr)
+	m.Set("cancels_in", &rootMetrics.cancelIn)
+	m.Set("calls_pending", &rootMetrics.callPending)
 
-	peerMetrics.emap = m
+	rootMetrics.emap = m
 }
