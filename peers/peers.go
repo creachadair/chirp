@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"sync"
 
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
@@ -44,13 +43,16 @@ type Accepter interface {
 	Accept(context.Context) (chirp.Channel, error)
 }
 
-// Loop accepts connections from acc and starts a peer for each one in a
-// goroutine. Loop continues until acc closes or ctx ends.
+// Loop accepts connections from acc and starts a clone of peer for each one in
+// a goroutine. Changes to peer while Loop executes will affect connections
+// accepted after each change is made, but peer itself is not started unless
+// the caller does so explicitly.
 //
-// When ctx terminates, all running peers are stopped. When acc closes, the
-// loop waits for running peers to exit before returning.
-func Loop(ctx context.Context, acc Accepter, newPeer func() *chirp.Peer) error {
-	g := taskgroup.New(nil)
+// Loop runs until acc closes or ctx ends.  When ctx terminates, all running
+// peers are stopped. When acc closes, Loop waits for running peers to exit
+// before returning.
+func Loop(ctx context.Context, acc Accepter, peer *chirp.Peer) error {
+	var g taskgroup.Group
 	for {
 		ch, err := acc.Accept(ctx)
 		if err != nil {
@@ -61,17 +63,13 @@ func Loop(ctx context.Context, acc Accepter, newPeer func() *chirp.Peer) error {
 			return err
 		}
 
-		pool := sync.Pool{New: func() any { return newPeer() }}
-
 		g.Go(func() error {
 			sctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			peer := pool.Get().(*chirp.Peer).Start(ch)
-			defer pool.Put(peer)
-
-			go func() { <-sctx.Done(); peer.Stop() }()
-			return peer.Wait()
+			cp := peer.Clone().Start(ch)
+			go func() { <-sctx.Done(); cp.Stop() }()
+			return cp.Wait()
 		})
 	}
 }
