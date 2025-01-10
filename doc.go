@@ -95,5 +95,35 @@
 // received matching the specified type. If the callback reports an error or
 // panics, it is treated as protocol fatal.
 //
+// # Metrics
+//
+// Peers maintain a collection of metrics while running. Use the [Peer.Metrics]
+// method to obtain an [expvar.Map] containing the metrics exported by the
+// peer. By default, metrics are shared globally among all peers.
+//
+// The metrics currently exported by peers include:
+//
+//   - packets_received: counter of packets received
+//   - packets_sent: counter of packets sent
+//   - packets_dropped: counter of packets received and discarded
+//   - calls_in: counter of inbound call requests received
+//   - calls_in_failed: counter of inbound call requests resulting in errors
+//   - calls_active: gauge of inbound calls currently active
+//   - calls_out: counter of outbound call requests sent
+//   - calls_out_failed: counter of outbound call requests resulting in errors
+//   - cancels_in: counter of cancellation requests received
+//   - calls_pending: gauge of outbound calls currently pending
+//
+// Additional metrics may be added in the future. It is safe for the caller to
+// modify the metrics map to add, update, and remove entries.
+//
+// Using [Peer.Detach] "detaches" the metrics for a peer, and thereafter the
+// metrics for that peer and its (recursive) clones will not affect the global
+// metrics.
+//
+//	p := chirp.NewPeer()  // p updates global metrics
+//	p.Detach()            // now p has its own metrics
+//	cp := p.Clone()       // cp updates the same metrics as p
+//
 // [Chirp v0]: https://github.com/creachadair/chirp/blob/main/spec.md
 package chirp

@@ -146,6 +146,11 @@ func (p *Peer) Start(ch Channel) *Peer {
 // additional metrics to the map while the peer is active.
 func (p *Peer) Metrics() *expvar.Map { return p.metrics().emap }
 
+// Detach detaches the peer metrics for p, and returns p. Calling Detach resets
+// all the metrics for p. Any peers (recursively) cloned from p after detaching
+// will share this new metrics pool.
+func (p *Peer) Detach() *Peer { p.peermx.Store(newPeerMetrics()); return p }
+
 // metrics returns the peerMetrics target for p.
 func (p *Peer) metrics() *peerMetrics {
 	if pm := p.peermx.Load(); pm != nil {
