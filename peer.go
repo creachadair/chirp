@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/creachadair/taskgroup"
@@ -83,7 +84,8 @@ type Peer struct {
 		sync.Mutex
 		ch Channel
 	}
-	tasks *taskgroup.Group
+	tasks  *taskgroup.Group
+	peermx atomic.Pointer[peerMetrics]
 
 	μ sync.Mutex
 
@@ -129,7 +131,7 @@ func (p *Peer) Start(ch Channel) *Peer {
 				p.fail(err)
 				return nil
 			}
-			rootMetrics.packetRecv.Add(1)
+			p.metrics().packetRecv.Add(1)
 			if err := p.dispatchPacket(pkt); err != nil {
 				p.fail(err)
 				return nil
@@ -142,7 +144,15 @@ func (p *Peer) Start(ch Channel) *Peer {
 
 // Metrics returns a metrics map for the peer. It is safe for the caller to add
 // additional metrics to the map while the peer is active.
-func (p *Peer) Metrics() *expvar.Map { return rootMetrics.emap }
+func (p *Peer) Metrics() *expvar.Map { return p.metrics().emap }
+
+// metrics returns the peerMetrics target for p.
+func (p *Peer) metrics() *peerMetrics {
+	if pm := p.peermx.Load(); pm != nil {
+		return pm
+	}
+	return rootMetrics
+}
 
 // Clone returns a new unstarted peer that has the same method handlers, packet
 // handlers, logger, and base context function as p.  After cloning, further
@@ -150,12 +160,14 @@ func (p *Peer) Metrics() *expvar.Map { return rootMetrics.emap }
 func (p *Peer) Clone() *Peer {
 	p.μ.Lock()
 	defer p.μ.Unlock()
-	return &Peer{
+	cp := &Peer{
 		imux: maps.Clone(p.imux),
 		pmux: maps.Clone(p.pmux),
 		plog: p.plog,
 		base: p.base,
 	}
+	cp.peermx.Store(p.peermx.Load())
+	return cp
 }
 
 // Stop closes the channel and terminates the peer. It blocks until the peer
@@ -225,10 +237,10 @@ func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
 // the error value is [*CallError], and if the error came from the remote peer
 // the corresponding response can be recovered from its Response field.
 func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Response, err error) {
-	rootMetrics.callOut.Add(1)
+	p.metrics().callOut.Add(1)
 	defer func() {
 		if err != nil {
-			rootMetrics.callOutErr.Add(1)
+			p.metrics().callOutErr.Add(1)
 		}
 	}()
 	if len(method) > MaxMethodLen {
@@ -241,8 +253,8 @@ func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Respons
 	if err != nil {
 		return nil, callError(err)
 	}
-	rootMetrics.callPending.Add(1)
-	defer rootMetrics.callPending.Add(-1)
+	p.metrics().callPending.Add(1)
+	defer p.metrics().callPending.Add(-1)
 
 	done := ctx.Done()
 	for {
@@ -485,8 +497,8 @@ func (p *Peer) callLocal(ctx context.Context, method string, data []byte) (*Resp
 		return nil, callError(err)
 	}
 
-	rootMetrics.callPending.Add(1)
-	defer rootMetrics.callPending.Add(-1)
+	p.metrics().callPending.Add(1)
+	defer p.metrics().callPending.Add(-1)
 	result, err := handler(ctx, &Request{
 		Method: method,
 		Data:   data,
@@ -570,10 +582,10 @@ func (p *Peer) sendCancel(id uint32) {
 // dispatchRequestLocked dispatches an inbound request to its handler.
 // It reports an error back to the caller for duplicate request ID or unknown method.
 func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
-	rootMetrics.callIn.Add(1)
+	p.metrics().callIn.Add(1)
 	defer func() {
 		if err != nil {
-			rootMetrics.callInErr.Add(1)
+			p.metrics().callInErr.Add(1)
 		}
 	}()
 
@@ -611,11 +623,11 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 	pctx := context.WithValue(p.base(), peerContextKey{}, p)
 	ctx, cancelCause := context.WithCancelCause(pctx)
 	p.icall[req.RequestID] = cancelCause
-	rootMetrics.callActive.Add(1)
+	p.metrics().callActive.Add(1)
 
 	p.tasks.Run(func() {
 		defer cancelCause(nil)
-		defer rootMetrics.callActive.Add(-1)
+		defer p.metrics().callActive.Add(-1)
 
 		data, err := func() (_ []byte, err error) {
 			// Ensure a panic out of the handler is turned into a graceful response.
@@ -684,7 +696,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		if err := req.Decode(pkt.Payload); err != nil {
 			return fmt.Errorf("invalid cancel packet: %w", err)
 		}
-		rootMetrics.cancelIn.Add(1)
+		p.metrics().cancelIn.Add(1)
 		p.μ.Lock()
 		defer p.μ.Unlock()
 
@@ -717,7 +729,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 		handler, ok := p.pmux[pkt.Type]
 		p.μ.Unlock()
 		if !ok {
-			rootMetrics.packetDropped.Add(1)
+			p.metrics().packetDropped.Add(1)
 			break // ignore the packet
 		}
 
@@ -755,7 +767,7 @@ func (p *Peer) sendOut(pkt *Packet) error {
 	if p.out.ch == nil {
 		panic("peer is not started")
 	}
-	rootMetrics.packetSent.Add(1)
+	p.metrics().packetSent.Add(1)
 	p.logPacket(pkt, Send)
 	return p.out.ch.Send(pkt)
 }
