@@ -20,21 +20,19 @@ type peerMetrics struct {
 	emap *expvar.Map
 }
 
-var rootMetrics peerMetrics
+var rootMetrics = newPeerMetrics()
 
-func init() {
-	m := new(expvar.Map)
-
-	m.Set("packets_received", &rootMetrics.packetRecv)
-	m.Set("packets_sent", &rootMetrics.packetSent)
-	m.Set("packets_dropped", &rootMetrics.packetDropped)
-	m.Set("calls_in", &rootMetrics.callIn)
-	m.Set("calls_in_failed", &rootMetrics.callInErr)
-	m.Set("calls_active", &rootMetrics.callActive)
-	m.Set("calls_out", &rootMetrics.callOut)
-	m.Set("calls_out_failed", &rootMetrics.callOutErr)
-	m.Set("cancels_in", &rootMetrics.cancelIn)
-	m.Set("calls_pending", &rootMetrics.callPending)
-
-	rootMetrics.emap = m
+func newPeerMetrics() *peerMetrics {
+	pm := &peerMetrics{emap: new(expvar.Map)}
+	pm.emap.Set("packets_received", &pm.packetRecv)
+	pm.emap.Set("packets_sent", &pm.packetSent)
+	pm.emap.Set("packets_dropped", &pm.packetDropped)
+	pm.emap.Set("calls_in", &pm.callIn)
+	pm.emap.Set("calls_in_failed", &pm.callInErr)
+	pm.emap.Set("calls_active", &pm.callActive)
+	pm.emap.Set("calls_out", &pm.callOut)
+	pm.emap.Set("calls_out_failed", &pm.callOutErr)
+	pm.emap.Set("cancels_in", &pm.cancelIn)
+	pm.emap.Set("calls_pending", &pm.callPending)
+	return pm
 }
