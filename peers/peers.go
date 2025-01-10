@@ -31,11 +31,13 @@ func (p *Local) Stop() error {
 
 // NewLocal creates a pair of in-memory connected peers, that communicate via a
 // direct channel without encoding.
+//
+// The peers in a new local instance are empty and have detached metrics.
 func NewLocal() *Local {
 	a2b, b2a := channel.Direct()
 	return &Local{
-		A: new(chirp.Peer).Start(a2b),
-		B: new(chirp.Peer).Start(b2a),
+		A: new(chirp.Peer).Detach().Start(a2b),
+		B: new(chirp.Peer).Detach().Start(b2a),
 	}
 }
 

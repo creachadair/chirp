@@ -1126,67 +1126,75 @@ func TestPeerMetrics(t *testing.T) {
 		if want >= 0 && got != want {
 			t.Errorf("Metric %q: got %d, want %d", metric, got, want)
 		}
-		t.Logf("Got %q = %d", metric, got)
 		return got
 	}
-
-	t.Run("Init", func(t *testing.T) {
-		// Initially these peers share the global metrics pool.  We don't know
-		// what the specific values will be, as it depends on what the rest of
-		// the test peers have been up to -- but they should be positive.
-		ci := check(t, loc.B, "calls_in", -1)
-		if ci <= 0 {
-			t.Errorf("Initial calls_in: got %d, want positive", ci)
+	mustCall := func(t *testing.T, p *chirp.Peer, method string) {
+		t.Helper()
+		if _, err := p.Call(ctx, method, nil); err != nil {
+			t.Fatalf("Call %q: unexpected error: %v", method, err)
 		}
-		co := check(t, loc.A, "calls_out", -1)
-		if co <= 0 {
-			t.Errorf("Initial calls_out: got %d, want positive", co)
-		}
+	}
 
-		if _, err := loc.A.Call(ctx, "ok", nil); err != nil {
-			t.Fatalf("Call ok: unexpected error: %v", err)
+	allMetrics := []string{
+		"packets_received",
+		"packets_sent",
+		"packets_dropped",
+		"calls_in",
+		"calls_in_failed",
+		"calls_active",
+		"calls_out",
+		"calls_out_failed",
+		"cancels_in",
+		"calls_pending",
+	}
+	checkZero := func(t *testing.T, p *chirp.Peer) {
+		t.Helper()
+		for _, name := range allMetrics {
+			check(t, p, name, 0)
 		}
+	}
 
-		// After a call, these should bump up.
-		check(t, loc.B, "calls_in", ci+1)
-		check(t, loc.A, "calls_out", co+1)
+	// The peers have initially empty metrics.
+	checkZero(t, loc.A)
+	checkZero(t, loc.B)
+
+	// After a call, the counters should be updated.
+	t.Run("Call", func(t *testing.T) {
+		mustCall(t, loc.A, "ok")
+		check(t, loc.A, "calls_out", 1)
+		check(t, loc.A, "calls_in", 0)
+		check(t, loc.A, "packets_received", 1)
+		check(t, loc.A, "packets_sent", 1)
+		check(t, loc.B, "calls_in", 1)
+		check(t, loc.B, "calls_out", 0)
+		check(t, loc.B, "packets_received", 1)
+		check(t, loc.B, "packets_sent", 1)
 	})
 
+	// Detached peers should have separate metrics.
 	t.Run("Detach", func(t *testing.T) {
-		// If we detach clones of these peers, their metrics should reset and
-		// track separately.
 		ab, ba := channel.Direct()
 		ca := loc.A.Clone().Detach().Start(ab)
 		defer ca.Stop()
 		cb := loc.B.Clone().Detach().Start(ba)
 		defer cb.Stop()
 
-		check(t, cb, "calls_in", 0)
-		check(t, ca, "calls_out", 0)
-
-		if _, err := ca.Call(ctx, "ok", nil); err != nil {
-			t.Fatalf("Call ok: unexpected error: %v", err)
-		}
-
-		check(t, cb, "calls_in", 1)
-		check(t, cb, "calls_out", 0)
-		check(t, ca, "calls_in", 0)
-		check(t, ca, "calls_out", 1)
-
-		cb.Detach()
-		check(t, cb, "calls_in", 0)
-		check(t, cb, "calls_out", 0)
-		check(t, ca, "calls_in", 0)
-		check(t, ca, "calls_out", 1)
+		// Metrics are zero after detachment.
+		checkZero(t, ca)
+		checkZero(t, cb)
+		mustCall(t, ca, "ok")
+		check(t, loc.A, "calls_out", 1)
+		check(t, loc.A, "calls_in", 0)
+		check(t, loc.B, "calls_in", 1)
+		check(t, loc.B, "calls_out", 0)
 	})
 
+	// The original peers are not affected by their detached cousins.
 	t.Run("Original", func(t *testing.T) {
-		// Detaching should not have disrupted the existing peers.
-		if got := check(t, loc.B, "calls_in", -1); got < 2 {
-			t.Errorf("Original calls_in: got %d, want more", got)
-		}
-		if got := check(t, loc.A, "calls_out", -1); got < 2 {
-			t.Errorf("Original calls_out: got %d, want more", got)
-		}
+		mustCall(t, loc.A, "ok")
+		check(t, loc.A, "calls_out", 2)
+		check(t, loc.A, "calls_in", 0)
+		check(t, loc.B, "calls_in", 2)
+		check(t, loc.B, "calls_out", 0)
 	})
 }
