@@ -19,19 +19,14 @@ type Packet struct {
 	Payload  []byte
 }
 
-// Encode encodes p in binary format.
-func (p Packet) Encode() []byte {
-	buf := make([]byte, 8+len(p.Payload))
-	buf[0], buf[1] = '\xc7', p.Protocol // magic + protocol
-	buf[2], buf[3] = byte(p.Type>>8), byte(p.Type&0xff)
-	binary.BigEndian.PutUint32(buf[4:], uint32(len(p.Payload)))
-	copy(buf[8:], p.Payload)
-	return buf
-}
-
 // WriteTo writes the packet to w in binary format. It satisfies [io.WriterTo].
-func (p *Packet) WriteTo(w io.Writer) (int64, error) {
-	nw, err := w.Write(p.Encode())
+func (p Packet) WriteTo(w io.Writer) (int64, error) {
+	buf := make([]byte, 0, 8+len(p.Payload))
+	buf = append(buf, '\xc7', p.Protocol, byte(p.Type>>8), byte(p.Type&255))
+	buf = binary.BigEndian.AppendUint32(buf, uint32(len(p.Payload)))
+	buf = append(buf, p.Payload...)
+
+	nw, err := w.Write(buf)
 	return int64(nw), err
 }
 

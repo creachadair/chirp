@@ -3,6 +3,7 @@
 package chirp_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"expvar"
@@ -469,13 +470,13 @@ func TestProtocolFatal(t *testing.T) {
 		p := chirp.NewPeer().Start(ch)
 		time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write(chirp.Packet{
+		chirp.Packet{
 			Type: chirp.PacketResponse,
 			Payload: chirp.Response{
 				RequestID: 100,
 				Code:      100,
 			}.Encode(),
-		}.Encode())
+		}.WriteTo(tw)
 		mustErr(t, p.Wait(), "invalid result code")
 	})
 
@@ -495,10 +496,10 @@ func TestProtocolFatal(t *testing.T) {
 		p := chirp.NewPeer().Handle("22", stall).Start(ch)
 		defer p.Stop()
 
-		tw.Write(chirp.Packet{
+		chirp.Packet{
 			Type:    chirp.PacketRequest,
 			Payload: chirp.Request{RequestID: 666, Method: "22"}.Encode(),
-		}.Encode())
+		}.WriteTo(tw)
 
 		// Wait for the method handler to be running.
 		<-ready
@@ -607,8 +608,11 @@ func TestProtocolVersion(t *testing.T) {
 		"\x00\x00\x30\x39" + // request ID 12345
 		"\x03foo" + // method name
 		"hello" // data
-	if got := string(want.Encode()); got != encoded {
-		t.Errorf("Packet encoding:\ngot:  %q\nwant: %q", got, encoded)
+	var got bytes.Buffer
+	if _, err := want.WriteTo(&got); err != nil {
+		t.Fatalf("Write packet: %v", err)
+	} else if got.String() != encoded {
+		t.Errorf("Packet encoding:\ngot:  %q\nwant: %q", got.String(), encoded)
 	}
 
 	ac, bc := channel.Direct()
