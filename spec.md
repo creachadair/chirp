@@ -111,7 +111,7 @@ The response data in case of a service error uses the following structure:
 | 0      | 2     | Error code (BE uint16)             |
 | 2      | 2     | Description length (BE uint16 = m) |
 | 4      | m     | Description (UTF-8 text)           |
-| 4+m    | rest  | Auxuiliary data                    |
+| 4+m    | rest  | Auxiliary data                     |
 
 - The **Error code** is an uninterpreted machine-readable error code describing the meaning of the error. The implementation SHOULD permit the method handler to choose this value; otherwise the implementation MUST set this field to 0.
 
@@ -216,7 +216,7 @@ The sequence of operations for a call is:
 
    - If the handler reports an error instead of a result, the callee sends `Response(id, SERVICE_ERROR, E)` where `E` is either empty or `Error(C, desc, data)` for a handler-defined choice of code `C`, human-readable description message `desc`, and ancillary data `data`.  This completes the call.
 
-Once a call is either terminated or complete, the `id` value for that call is eligible for reuse unless the reponse code was `DUPLICATE_REQUEST`.
+Once a call is either terminated or complete, the `id` value for that call is eligible for reuse unless the response code was `DUPLICATE_REQUEST`.
 
 **Implementation note:** The rules above define the order of operations for a single call, but a call is not required to terminate or complete before another call (with a different request ID) can be initiated. Peers may initiate multiple calls concurrently, provided the request IDs are distinct.  The request IDs for inbound and outbound calls are independent, and may overlap, for example, peer A may send a request to peer B with ID 1 at the same time as peer B sends a request to peer A with ID 1. These are distinct requests, not duplicates.
 
