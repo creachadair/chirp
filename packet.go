@@ -42,18 +42,17 @@ func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 	}
 	p.Protocol = buf[1]
 	p.Type = PacketType(uint16(buf[2])*256 + uint16(buf[3]))
+	p.Payload = nil
 
 	if psize := binary.BigEndian.Uint32(buf[4:]); psize > 0 {
 		p.Payload = make([]byte, int(psize))
-		var np int
-		np, err = io.ReadFull(r, p.Payload)
-		nr += np
+		np, err := io.ReadFull(r, p.Payload)
 		if err != nil {
-			err = fmt.Errorf("short payload: %w", err)
+			return int64(nr + np), fmt.Errorf("short payload: %w", err)
 		}
+		nr += np
 	}
-
-	return int64(nr), err
+	return int64(nr), nil
 }
 
 // String returns a human-friendly rendering of the packet.
@@ -127,11 +126,11 @@ func (r Request) Encode() []byte {
 	if mlen > 255 {
 		panic(fmt.Sprintf("method name is %d (>255) bytes", mlen))
 	}
-	buf := make([]byte, 4+1+mlen+len(r.Data)) // 4 request ID, 1 method name length
-	binary.BigEndian.PutUint32(buf[0:], r.RequestID)
-	buf[4] = byte(mlen)
-	copy(buf[5:], r.Method)
-	copy(buf[5+mlen:], r.Data)
+	buf := make([]byte, 0, 4+1+mlen+len(r.Data)) // 4 request ID, 1 method name length
+	buf = binary.BigEndian.AppendUint32(buf, r.RequestID)
+	buf = append(buf, byte(mlen))
+	buf = append(buf, r.Method...)
+	buf = append(buf, r.Data...)
 	return buf
 }
 
@@ -146,10 +145,9 @@ func (r *Request) Decode(data []byte) error {
 		return fmt.Errorf("short method name (%d > %d bytes)", 5+mlen, len(data))
 	}
 	r.Method = string(data[5 : 5+mlen])
+	r.Data = nil
 	if len(data[5+mlen:]) > 0 {
 		r.Data = data[5+mlen:]
-	} else {
-		r.Data = nil
 	}
 	return nil
 }
@@ -168,11 +166,10 @@ type Response struct {
 
 // Encode encodes the response data in binary format.
 func (r Response) Encode() []byte {
-	buf := make([]byte, 5+len(r.Data)) // 4 request ID, 1 code
-	binary.BigEndian.PutUint32(buf[0:], r.RequestID)
-	buf[4] = byte(r.Code)
-	copy(buf[5:], r.Data)
-	return buf
+	buf := make([]byte, 0, 4+1+len(r.Data)) // 4 request ID, 1 code
+	buf = binary.BigEndian.AppendUint32(buf, r.RequestID)
+	buf = append(buf, byte(r.Code))
+	return append(buf, r.Data...)
 }
 
 // Decode decodes data into a Chirp v0 response payload.
@@ -245,8 +242,7 @@ type Cancel struct {
 // Encode encodes the cancel request data in binary format.
 func (c Cancel) Encode() []byte {
 	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], c.RequestID)
-	return buf[:]
+	return binary.BigEndian.AppendUint32(buf[:0], c.RequestID)
 }
 
 // Decode decodes data into a Chirp v0 cancel payload.
@@ -286,12 +282,11 @@ func (e ErrorData) Encode() []byte {
 	msg := mstr.Trunc(e.Message, 65535)
 	mlen := len(msg)
 
-	buf := make([]byte, 4+mlen+len(e.Data)) // 2 code, 2 length
-	binary.BigEndian.PutUint16(buf[0:], e.Code)
-	binary.BigEndian.PutUint16(buf[2:], uint16(mlen))
-	copy(buf[4:], msg)
-	copy(buf[4+mlen:], e.Data)
-	return buf
+	buf := make([]byte, 0, 4+mlen+len(e.Data)) // 2 code, 2 length
+	buf = binary.BigEndian.AppendUint16(buf, e.Code)
+	buf = binary.BigEndian.AppendUint16(buf, uint16(mlen))
+	buf = append(buf, msg...)
+	return append(buf, e.Data...)
 }
 
 func trimData(data []byte) string {
