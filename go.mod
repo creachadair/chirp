@@ -12,6 +12,7 @@ require (
 
 require (
 	github.com/creachadair/command v0.1.20
+	github.com/creachadair/flax v0.0.4
 	github.com/creachadair/mds v0.23.0
 	honnef.co/go/tools v0.5.1
 )

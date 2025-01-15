@@ -13,12 +13,18 @@ import (
 
 	"github.com/creachadair/chirp/packet"
 	"github.com/creachadair/command"
+	"github.com/creachadair/flax"
 )
+
+var flags struct {
+	Quoted bool `flag:"q,Format output as a quoted string"`
+}
 
 func main() {
 	root := &command.C{
-		Name: filepath.Base(os.Args[0]),
-		Help: "Utilities for interacting with Chirp v0 peers.",
+		Name:     filepath.Base(os.Args[0]),
+		Help:     "Utilities for interacting with Chirp v0 peers.",
+		SetFlags: command.Flags(flax.MustBind, &flags),
 		Commands: []*command.C{
 			{
 				Name:  "pack",
@@ -71,7 +77,11 @@ and changes to those values do not persist after the subpattern ends.
 					} else if len(rest) != 0 {
 						return fmt.Errorf("extra arguments: %q", rest)
 					}
-					os.Stdout.Write(enc.Encode(nil))
+					if flags.Quoted {
+						fmt.Printf("%q\n", enc.Encode(nil))
+					} else {
+						os.Stdout.Write(enc.Encode(nil))
+					}
 					return nil
 				},
 			},
