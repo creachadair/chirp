@@ -13,4 +13,4 @@ not be considered ready for production use.
 
 - [Specification](spec.md)
 - [Go implementation](https://godoc.org/github.com/creachadair/chirp)
-- [Usage example in the Go Playground](https://go.dev/play/p/3ddepzUTHWG)
+- [Usage example in the Go Playground](https://go.dev/play/p/kjCYKcHx9t_T)
