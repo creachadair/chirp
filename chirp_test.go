@@ -548,6 +548,7 @@ func TestCustomPacket(t *testing.T) {
 			return chirp.ContextPeer(ctx).SendPacket(129, []byte(rsp))
 		}).
 		LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			t.Logf("A: [%s] %v", dir, pkt)
 			if dir == chirp.Recv {
 				log = append(log, pkt)
 			}

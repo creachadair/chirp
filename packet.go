@@ -76,7 +76,7 @@ func (p *Packet) String() string {
 		}
 	}
 	if pay == "" {
-		pay = fmt.Sprint(p.Payload)
+		pay = trimData(p.Payload)
 	}
 	return fmt.Sprintf("Packet(v%v, %v, %s)", p.Protocol, p.Type, pay)
 }
