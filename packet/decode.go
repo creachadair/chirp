@@ -25,7 +25,7 @@ func (v *Vint30) Decode(buf []byte) int {
 }
 
 // Decode implements the Decoder interface.
-func (m *MBytes) Decode(buf []byte) int {
+func (m *MBytes[T]) Decode(buf []byte) int {
 	*m = (*m)[:0]
 	var total int
 	for len(buf) != 0 {
@@ -33,7 +33,7 @@ func (m *MBytes) Decode(buf []byte) int {
 		if nb < 0 {
 			return -1
 		}
-		*m = append(*m, []byte(b))
+		*m = append(*m, T(b))
 		buf = buf[nb:]
 		total += nb
 	}

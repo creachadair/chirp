@@ -82,12 +82,12 @@ func ParseVint30(buf []byte) (int, Vint30) {
 	return s, Vint30(w / 4)
 }
 
-// MBytes is a slice of byte slices that encode to the concatenation of each
-// with a Vint30 prefix.
-type MBytes [][]byte
+// MBytes is a slice of byte slices or strings that encode to the concatenation
+// of each with a Vint30 prefix.
+type MBytes[T ~string | ~[]byte] []T
 
 // EncodedLen reports the number of bytes needed to encode m.
-func (m MBytes) EncodedLen() int {
+func (m MBytes[T]) EncodedLen() int {
 	var n int
 	for _, bs := range m {
 		n += Vint30(len(bs)).EncodedLen() + len(bs)
@@ -95,7 +95,7 @@ func (m MBytes) EncodedLen() int {
 	return n
 }
 
-func (m MBytes) Encode(buf []byte) []byte {
+func (m MBytes[T]) Encode(buf []byte) []byte {
 	for _, bs := range m {
 		buf = Bytes(bs).Encode(buf)
 	}

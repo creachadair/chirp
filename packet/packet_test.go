@@ -14,7 +14,8 @@ import (
 var (
 	_ packet.Encoder = packet.Vint30(0)
 	_ packet.Encoder = packet.Bytes(nil)
-	_ packet.Encoder = packet.MBytes(nil)
+	_ packet.Encoder = packet.MBytes[string](nil)
+	_ packet.Encoder = packet.MBytes[[]byte](nil)
 	_ packet.Encoder = packet.Literal("")
 	_ packet.Encoder = packet.Bool(false)
 	_ packet.Encoder = packet.Raw(nil)
@@ -22,7 +23,8 @@ var (
 
 	_ packet.Decoder = (*packet.Vint30)(nil)
 	_ packet.Decoder = (*packet.Bytes)(nil)
-	_ packet.Decoder = (*packet.MBytes)(nil)
+	_ packet.Decoder = (*packet.MBytes[string])(nil)
+	_ packet.Decoder = (*packet.MBytes[[]byte])(nil)
 	_ packet.Decoder = packet.Literal("")
 	_ packet.Decoder = (*packet.Bool)(nil)
 	_ packet.Decoder = (*packet.Raw)(nil)
@@ -294,7 +296,7 @@ func TestMBytes(t *testing.T) {
 		{"\x04.\x04.--", nil, true}, // garbage after some good results
 	}
 	for _, tc := range tests {
-		var mb packet.MBytes
+		var mb packet.MBytes[[]byte]
 
 		n := mb.Decode([]byte(tc.input))
 		if tc.bad {
