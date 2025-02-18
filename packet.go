@@ -21,12 +21,15 @@ type Packet struct {
 
 // WriteTo writes the packet to w in binary format. It satisfies [io.WriterTo].
 func (p Packet) WriteTo(w io.Writer) (int64, error) {
-	buf := make([]byte, 0, 8+len(p.Payload))
+	buf := make([]byte, 0, 8)
 	buf = append(buf, '\xc7', p.Protocol, byte(p.Type>>8), byte(p.Type&255))
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(p.Payload)))
-	buf = append(buf, p.Payload...)
-
 	nw, err := w.Write(buf)
+	if err != nil {
+		return int64(nw), err
+	}
+	np, err := w.Write(p.Payload)
+	nw += np
 	return int64(nw), err
 }
 
