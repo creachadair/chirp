@@ -160,8 +160,8 @@ func (p *Peer) metrics() *peerMetrics {
 }
 
 // Clone returns a new unstarted peer that has the same method handlers, packet
-// handlers, logger, and base context function as p.  After cloning, further
-// changes to either peer do not affect the other.
+// handlers, logger, metrics, and base context function as p.  After cloning,
+// further changes to either peer do not affect the other.
 func (p *Peer) Clone() *Peer {
 	p.μ.Lock()
 	defer p.μ.Unlock()
