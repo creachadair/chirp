@@ -344,6 +344,9 @@ var errPeerCancel = errors.New("peer canceled request")
 // If no handler is defined for method, Exec reports an internal error with an
 // empty result; otherwise it returns the result of calling the handler with
 // the given data.
+//
+// If the handler for the specified method itself executes [Peer.Call], the
+// call will dispatch to p itself, as if calling [Peer.Exec].
 func (p *Peer) Exec(ctx context.Context, method string, data []byte) ([]byte, error) {
 	if ContextPeer(ctx) == nil {
 		ctx = context.WithValue(ctx, peerContextKey{}, p)
