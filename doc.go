@@ -124,6 +124,7 @@
 //	p := chirp.NewPeer()  // p updates global metrics
 //	p.Detach()            // now p has its own metrics
 //	cp := p.Clone()       // cp updates the same metrics as p
+//	ccp := cp.Clone()     // ccp updates the same metrics as cp and p
 //
 // [Chirp v0]: https://github.com/creachadair/chirp/blob/main/spec.md
 package chirp
