@@ -7,13 +7,13 @@ toolchain go1.23.1
 require (
 	github.com/creachadair/taskgroup v0.13.2
 	github.com/fortytw2/leaktest v1.3.0
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 )
 
 require (
 	github.com/creachadair/command v0.1.22
 	github.com/creachadair/flax v0.0.4
-	github.com/creachadair/mds v0.23.0
+	github.com/creachadair/mds v0.24.0
 	honnef.co/go/tools v0.5.1
 )
 
