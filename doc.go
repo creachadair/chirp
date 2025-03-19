@@ -68,7 +68,15 @@
 //
 // A method handler may "call back" to methods of the remote peer. To do so,
 // the handler uses [ContextPeer] to obtain the local peer, and executes its
-// [Peer.Call] method. This behaves as any other call made by the local peer.
+// [Peer.Call] method. This behaves as any other call made by the local peer:
+//
+//	func handle(ctx context.Context, req *chirp.Request) ([]byte, error) {
+//	    rsp, err := chirp.ContextPeer(ctx).Call(ctx, "hello", []byte("world"))
+//	    if err != nil {
+//	       return nil, err
+//	    }
+//	    return doStuffWith(rsp, req.Data)
+//	}
 //
 // # Local Calls
 //
