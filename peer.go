@@ -273,7 +273,7 @@ func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Respons
 
 			// Set a watchdog timer to ensure the call eventually gives up and
 			// reports an error, even if we don't get a reply from the peer.
-			ct := time.AfterFunc(50*time.Millisecond, func() {
+			ct := time.AfterFunc(100*time.Millisecond, func() {
 				p.μ.Lock()
 				defer p.μ.Unlock()
 
