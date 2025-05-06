@@ -112,7 +112,7 @@ func formatData(pat string, args []string) (packet.Slice, []string, error) {
 		}
 	}
 	var enc packet.Slice
-	for i := 0; i < len(pat); i++ {
+	for i := range len(pat) {
 		c := pat[i]
 		switch c {
 		case 'b', 'p', 'q', 'r', 's', '%', 'v', '1', '2', '4', '8':

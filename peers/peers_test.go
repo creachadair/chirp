@@ -42,7 +42,7 @@ func TestLoop(t *testing.T) {
 		cancel()
 		t.Errorf("Task error: %v", err)
 	})
-	for i := 0; i < numClients; i++ {
+	for range numClients {
 		g.Go(func() error {
 			conn, err := net.Dial("tcp", addr)
 			if err != nil {
@@ -50,7 +50,7 @@ func TestLoop(t *testing.T) {
 			}
 			defer conn.Close()
 			peer := chirp.NewPeer().Start(channel.IO(conn, conn))
-			for j := 0; j < numCalls; j++ {
+			for j := range numCalls {
 				_, err := peer.Call(context.Background(), "100", nil)
 				if err != nil {
 					t.Errorf("Call %d: %v", j+1, err)

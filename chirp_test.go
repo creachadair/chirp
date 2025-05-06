@@ -803,7 +803,7 @@ func runConcurrent(t *testing.T, pa, pb *chirp.Peer) {
 	const numCalls = 128 // per peer
 
 	calls := taskgroup.New(cancel)
-	for i := 0; i < numCalls; i++ {
+	for i := range numCalls {
 
 		// Send calls from A to B.
 		ab := fmt.Sprintf("ab-call-%d", i+1)

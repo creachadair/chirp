@@ -57,7 +57,7 @@ func (v Vint30) Encode(buf []byte) []byte {
 	}
 	w := uint32(v)*4 + uint32(s-1)
 	var tmp [4]byte
-	for i := 0; i < s; i++ {
+	for i := range s {
 		tmp[i] = byte(w % 256)
 		w /= 256
 	}

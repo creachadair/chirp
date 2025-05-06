@@ -49,7 +49,7 @@ func runBench(b *testing.B, peer *chirp.Peer, data []byte) {
 	b.Helper()
 	ctx := context.Background()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := peer.Call(ctx, "X", nil)
 		if err != nil {
 			b.Fatal(err)
