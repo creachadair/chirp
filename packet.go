@@ -50,10 +50,10 @@ func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 	if psize := binary.BigEndian.Uint32(buf[4:]); psize > 0 {
 		p.Payload = make([]byte, int(psize))
 		np, err := io.ReadFull(r, p.Payload)
-		if err != nil {
-			return int64(nr + np), fmt.Errorf("short payload: %w", err)
-		}
 		nr += np
+		if err != nil {
+			return int64(nr), fmt.Errorf("short payload: %w", err)
+		}
 	}
 	return int64(nr), nil
 }
