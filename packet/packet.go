@@ -96,6 +96,7 @@ func (m MBytes[T]) EncodedLen() int {
 }
 
 func (m MBytes[T]) Encode(buf []byte) []byte {
+	buf = slices.Grow(buf, m.EncodedLen())
 	for _, bs := range m {
 		buf = Bytes(bs).Encode(buf)
 	}
