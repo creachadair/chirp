@@ -11,6 +11,7 @@ import (
 	"maps"
 	"net"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -852,15 +853,19 @@ func isLocalExec(ctx context.Context) bool {
 //
 // The assignment of a network type uses the following heuristics:
 //
-// If s does not have the form [host]:port, the network is assigned as "unix".
-// The network "unix" is also assigned if port == "", port contains characters
-// other than ASCII letters, digits, and "-", or if host contains a "/".
+// If s does not have the form [host]:port, the network is assigned as "tcp" if
+// the address is numeric; otherwise it is assigned "unix".  The network "unix"
+// is also assigned if port == "", if port contains characters other than ASCII
+// letters, digits, and "-", or if host contains a "/".
 //
 // Otherwise, the network is assigned as "tcp". Note that this function does
 // not verify whether the address is lexically valid.
 func SplitAddress(s string) (network, address string) {
 	i := strings.LastIndex(s, ":")
 	if i < 0 {
+		if _, err := strconv.Atoi(s); err == nil {
+			return "tcp", s
+		}
 		return "unix", s
 	}
 	host, port := s[:i], s[i+1:]

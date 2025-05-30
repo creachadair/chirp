@@ -920,8 +920,9 @@ func TestSplitAddress(t *testing.T) {
 		{"", "unix"},
 		{":", "unix"},
 
-		{"nothing", "unix"},        // no colon
-		{"like/a/file", "unix"},    // no colon
+		{"12345", "tcp"},           // no colon, numeric
+		{"nothing", "unix"},        // no colon, non-numeric
+		{"like/a/file", "unix"},    // no colon, non-numeric
 		{"no-port:", "unix"},       // empty port
 		{"file/with:port", "unix"}, // slashes in host
 		{"path/with:404", "unix"},  // slashes in host
