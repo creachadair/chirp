@@ -127,7 +127,7 @@
 //
 // Using [Peer.Detach] "detaches" the metrics for a peer, and thereafter the
 // metrics for that peer and its (recursive) clones will not affect the global
-// metrics.
+// metrics, nor the metrics of the peer from which they were detached.
 //
 //	p := chirp.NewPeer()  // p updates global metrics
 //	p.Detach()            // now p has its own metrics
