@@ -9,9 +9,9 @@ require (
 )
 
 require (
-	github.com/creachadair/command v0.1.22
+	github.com/creachadair/command v0.1.23
 	github.com/creachadair/flax v0.0.5
-	github.com/creachadair/mds v0.24.3
+	github.com/creachadair/mds v0.25.1
 )
 
 require (
