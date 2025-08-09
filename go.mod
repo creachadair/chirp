@@ -3,13 +3,13 @@ module github.com/creachadair/chirp
 go 1.24
 
 require (
-	github.com/creachadair/taskgroup v0.13.2
+	github.com/creachadair/taskgroup v0.14.0
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/google/go-cmp v0.7.0
 )
 
 require (
-	github.com/creachadair/command v0.1.24
+	github.com/creachadair/command v0.1.25
 	github.com/creachadair/flax v0.0.5
 	github.com/creachadair/mds v0.25.2
 )
