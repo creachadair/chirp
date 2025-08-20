@@ -212,9 +212,9 @@ The sequence of operations for a call is:
 
    - If the handler completes with result `R`, the callee sends `Response(id, SUCCESS, R)`. This completes the call.
 
-   - If the handler terminates abnormally (for example via an exception or a panic), the callee sends `Response(id, SERVICE_ERROR, E)` where `E` is either empty or `Error(C, desc, data)` for an implementation-defined choice of code `C`, human readable description message `desc`, and ancillary data `data`.  This completes the call.
+   - If the handler terminates abnormally (for example via an exception or a panic that the peer is able to recover), the callee sends `Response(id, SERVICE_ERROR, E)` where `E` is either empty or `Error(C, desc, data)` for an implementation-defined choice of code `C`, human readable description message `desc`, and ancillary data `data`.  This completes the call.
 
-   - If the handler reports an error instead of a result, the callee sends `Response(id, SERVICE_ERROR, E)` where `E` is either empty or `Error(C, desc, data)` for a handler-defined choice of code `C`, human-readable description message `desc`, and ancillary data `data`.  This completes the call.
+   - If the handler completes reporting an error instead of a result, the callee sends `Response(id, SERVICE_ERROR, E)` where `E` is either empty or `Error(C, desc, data)` for a handler-defined choice of code `C`, human-readable description message `desc`, and ancillary data `data`.  This completes the call.
 
 Once a call is either terminated or complete, the `id` value for that call is eligible for reuse unless the response code was `DUPLICATE_REQUEST`.
 
