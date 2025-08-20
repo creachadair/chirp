@@ -8,8 +8,10 @@ suitable for use over stream-oriented transports like sockets and pipes. It
 uses a byte-oriented packet format with fixed headers to minimize the
 amount of bit-level manipulation necessary to encode and decode messages.
 
-The specification and its implementation are still in development and should
-not be considered ready for production use.
+The specification and its implementation are still in development at v0. Tagged
+versions will increment the minor revision for substantial new features and
+breaking changes, and the patch revision for bug fixes and other compatible
+updates.
 
 - [Specification](spec.md)
 - [Go implementation](https://godoc.org/github.com/creachadair/chirp)
