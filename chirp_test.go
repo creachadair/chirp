@@ -206,63 +206,97 @@ func TestWildcard(t *testing.T) {
 func TestCancellation(t *testing.T) {
 	defer leaktest.Check(t)()
 
-	loc := peers.NewLocal()
-	defer loc.Stop()
+	t.Run("Early", func(t *testing.T) {
+		loc := peers.NewLocal()
+		defer loc.Stop()
 
-	type packet struct {
-		T chirp.PacketType
-		P string
-	}
+		loc.A.Handle("unseen", func(context.Context, *chirp.Request) ([]byte, error) {
+			return nil, errors.New("you should not see this")
+		})
 
-	var wg sync.WaitGroup
-	wg.Add(3) // there are three packets exchanged below
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel() // not deferred, we want it already finished at the time of the call
 
-	var apkt []packet
-	loc.A.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
-		if dir == chirp.Recv {
-			apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
-			wg.Done()
+		rsp, err := loc.B.Call(ctx, "unseen", nil)
+		if err == nil {
+			t.Error("Call unexpectedly succeeded")
+		} else if !errors.Is(err, context.Canceled) {
+			t.Errorf("Call: got error = %+v, want %v", err, context.Canceled)
 		}
-	}).Handle("300", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
-		<-ctx.Done()
-		return nil, ctx.Err()
+		if rsp != nil {
+			t.Errorf("Call reported response %+v, wanted none", rsp)
+		}
+
+		data, err := loc.A.Exec(ctx, "unseen", nil)
+		if err == nil {
+			t.Error("Exec unexpectedly succeeded")
+		} else if !errors.Is(err, context.Canceled) {
+			t.Errorf("Exec: got error = %+v, want %v", err, context.Canceled)
+		}
+		if len(data) != 0 {
+			t.Errorf("Exec reported response %q, wanted none", data)
+		}
 	})
 
-	var bpkt []packet
-	loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
-		if dir == chirp.Recv {
-			bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
-			wg.Done()
+	t.Run("Late", func(t *testing.T) {
+		loc := peers.NewLocal()
+		defer loc.Stop()
+
+		type packet struct {
+			T chirp.PacketType
+			P string
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(3) // there are three packets exchanged below
+
+		var apkt []packet
+		loc.A.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			if dir == chirp.Recv {
+				apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
+				wg.Done()
+			}
+		}).Handle("300", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		})
+
+		var bpkt []packet
+		loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			if dir == chirp.Recv {
+				bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
+				wg.Done()
+			}
+		})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		defer cancel()
+
+		rsp, err := loc.B.Call(ctx, "300", nil)
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("Got %+v, %v; want %v", rsp, err, context.Canceled)
+		}
+
+		wg.Wait()
+
+		// B should have sent a Request followed by a Cancellation.
+		if diff := cmp.Diff([]packet{
+			// Request(1, 300, nil)
+			{T: chirp.PacketRequest, P: "\x00\x00\x00\x01\x03300"},
+			// Cancel(1)
+			{T: chirp.PacketCancel, P: "\x00\x00\x00\x01"},
+		}, apkt); diff != "" {
+			t.Errorf("A packets (-want, +got):\n%s", diff)
+		}
+
+		// A should have replied with a cancellation Response for B's Request.
+		if diff := cmp.Diff([]packet{
+			// Response(1, CANCELED, 0, nil)
+			{T: chirp.PacketResponse, P: "\x00\x00\x00\x01\x03"},
+		}, bpkt); diff != "" {
+			t.Errorf("B packets (-want, +got):\n%s", diff)
 		}
 	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-
-	rsp, err := loc.B.Call(ctx, "300", nil)
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("Got %+v, %v; want %v", rsp, err, context.Canceled)
-	}
-
-	wg.Wait()
-
-	// B should have sent a Request followed by a Cancellation.
-	if diff := cmp.Diff([]packet{
-		// Request(1, 300, nil)
-		{T: chirp.PacketRequest, P: "\x00\x00\x00\x01\x03300"},
-		// Cancel(1)
-		{T: chirp.PacketCancel, P: "\x00\x00\x00\x01"},
-	}, apkt); diff != "" {
-		t.Errorf("A packets (-want, +got):\n%s", diff)
-	}
-
-	// A should have replied with a cancellation Response for B's Request.
-	if diff := cmp.Diff([]packet{
-		// Response(1, CANCELED, 0, nil)
-		{T: chirp.PacketResponse, P: "\x00\x00\x00\x01\x03"},
-	}, bpkt); diff != "" {
-		t.Errorf("B packets (-want, +got):\n%s", diff)
-	}
 }
 
 func TestPeerExec(t *testing.T) {

@@ -252,6 +252,9 @@ func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Respons
 	if len(method) > MaxMethodLen {
 		return nil, callError(fmt.Errorf("method %q name too long (%d bytes > %d)", method, len(method), MaxMethodLen))
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, callError(err) // already ended, don't attempt to forward it
+	}
 	if isLocalExec(ctx) {
 		return p.callLocal(ctx, method, data)
 	}
