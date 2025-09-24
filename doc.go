@@ -47,7 +47,7 @@
 // that responds is the callee. Calls may propagate in either direction.
 //
 // To define method handlers for inbound calls on the peer, use the
-// [Peer.Handle] method to register a handler for the method ID:
+// [Peer.Handle] method to register a handler for a method name:
 //
 //	func echo(ctx context.Context, req *chirp.Request) ([]byte, error) {
 //	   return req.Data, nil
