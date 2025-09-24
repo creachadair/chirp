@@ -12,7 +12,7 @@
 // # Peers
 //
 // The core type defined by this package is the [Peer]. Peers concurrently
-// initiate and and service calls with another peer over a [Channel].
+// initiate and service calls with another peer over a [Channel].
 //
 // To create a new, unstarted peer:
 //
