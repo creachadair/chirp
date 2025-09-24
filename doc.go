@@ -93,10 +93,10 @@
 //
 // # Custom Packet Handlers
 //
-// To handle packet types other than [Request], [Response], and [Cancel], the
-// caller can use the [Peer.SendPacket] and [Peer.HandlePacket] methods.
-// SendPacket allows the caller to send an arbitrary packet to the peer. Peers
-// that do not understand a packet type will silently discard it (per the
+// To handle packet types other than [Request], [Response], and [Cancel], use
+// the [Peer.SendPacket] and [Peer.HandlePacket] methods.
+// SendPacket allows a peer to send an arbitrary packet to its connected peer.
+// Peers that do not understand a packet type will silently discard it (per the
 // spec).
 //
 // HandlePacket registers a callback that will be invoked when a packet is
