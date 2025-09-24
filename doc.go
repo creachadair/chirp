@@ -41,9 +41,9 @@
 //
 // # Calls
 //
-// A call is a request-response exchange between two peers, consisting of a
-// request and a corresponding response.  This is the primary communication
-// between peers.  The peer that initiates the call is the caller, the peer
+// A call is an exchange between two peers, consisting of a request and a
+// corresponding response.  This is the primary communication between peers.
+// The peer that initiates the call is the caller, the peer
 // that responds is the callee. Calls may propagate in either direction.
 //
 // To define method handlers for inbound calls on the peer, use the
