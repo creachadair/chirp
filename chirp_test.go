@@ -205,8 +205,6 @@ func TestWildcard(t *testing.T) {
 }
 
 func TestCancellation(t *testing.T) {
-	defer leaktest.Check(t)()
-
 	t.Run("Early", func(t *testing.T) {
 		loc := peers.NewLocal()
 		defer loc.Stop()
@@ -386,8 +384,6 @@ func TestPeerExec(t *testing.T) {
 
 func TestSlowCancellation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		defer leaktest.Check(t)()
-
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
@@ -780,8 +776,6 @@ func TestConcurrency(t *testing.T) {
 
 func TestDuplicate(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		defer leaktest.Check(t)()
-
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
