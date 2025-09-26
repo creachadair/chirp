@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/creachadair/chirp"
@@ -239,63 +240,65 @@ func TestCancellation(t *testing.T) {
 	})
 
 	t.Run("Late", func(t *testing.T) {
-		loc := peers.NewLocal()
-		defer loc.Stop()
+		synctest.Test(t, func(t *testing.T) {
+			loc := peers.NewLocal()
+			defer loc.Stop()
 
-		type packet struct {
-			T chirp.PacketType
-			P string
-		}
-
-		var wg sync.WaitGroup
-		wg.Add(3) // there are three packets exchanged below
-
-		var apkt []packet
-		loc.A.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
-			if dir == chirp.Recv {
-				apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
-				wg.Done()
+			type packet struct {
+				T chirp.PacketType
+				P string
 			}
-		}).Handle("300", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
-			<-ctx.Done()
-			return nil, ctx.Err()
-		})
 
-		var bpkt []packet
-		loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
-			if dir == chirp.Recv {
-				bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
-				wg.Done()
+			var wg sync.WaitGroup
+			wg.Add(3) // there are three packets exchanged below
+
+			var apkt []packet
+			loc.A.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+				if dir == chirp.Recv {
+					apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
+					wg.Done()
+				}
+			}).Handle("300", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			})
+
+			var bpkt []packet
+			loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+				if dir == chirp.Recv {
+					bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
+					wg.Done()
+				}
+			})
+
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+			defer cancel()
+
+			rsp, err := loc.B.Call(ctx, "300", nil)
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("Got %+v, %v; want %v", rsp, err, context.Canceled)
+			}
+
+			wg.Wait()
+
+			// B should have sent a Request followed by a Cancellation.
+			if diff := cmp.Diff([]packet{
+				// Request(1, 300, nil)
+				{T: chirp.PacketRequest, P: "\x00\x00\x00\x01\x03300"},
+				// Cancel(1)
+				{T: chirp.PacketCancel, P: "\x00\x00\x00\x01"},
+			}, apkt); diff != "" {
+				t.Errorf("A packets (-want, +got):\n%s", diff)
+			}
+
+			// A should have replied with a cancellation Response for B's Request.
+			if diff := cmp.Diff([]packet{
+				// Response(1, CANCELED, 0, nil)
+				{T: chirp.PacketResponse, P: "\x00\x00\x00\x01\x03"},
+			}, bpkt); diff != "" {
+				t.Errorf("B packets (-want, +got):\n%s", diff)
 			}
 		})
-
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-		defer cancel()
-
-		rsp, err := loc.B.Call(ctx, "300", nil)
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("Got %+v, %v; want %v", rsp, err, context.Canceled)
-		}
-
-		wg.Wait()
-
-		// B should have sent a Request followed by a Cancellation.
-		if diff := cmp.Diff([]packet{
-			// Request(1, 300, nil)
-			{T: chirp.PacketRequest, P: "\x00\x00\x00\x01\x03300"},
-			// Cancel(1)
-			{T: chirp.PacketCancel, P: "\x00\x00\x00\x01"},
-		}, apkt); diff != "" {
-			t.Errorf("A packets (-want, +got):\n%s", diff)
-		}
-
-		// A should have replied with a cancellation Response for B's Request.
-		if diff := cmp.Diff([]packet{
-			// Response(1, CANCELED, 0, nil)
-			{T: chirp.PacketResponse, P: "\x00\x00\x00\x01\x03"},
-		}, bpkt); diff != "" {
-			t.Errorf("B packets (-want, +got):\n%s", diff)
-		}
 	})
 }
 
@@ -382,182 +385,180 @@ func TestPeerExec(t *testing.T) {
 }
 
 func TestSlowCancellation(t *testing.T) {
-	defer leaktest.Check(t)()
+	synctest.Test(t, func(t *testing.T) {
+		defer leaktest.Check(t)()
 
-	loc := peers.NewLocal()
-	defer loc.Stop()
+		loc := peers.NewLocal()
+		defer loc.Stop()
 
-	stop := make(chan struct{}) // close to release the blocked 666 handler
-	logA := logPacket(t, "Peer A")
+		logA := logPacket(t, "Peer A")
 
-	var wg sync.WaitGroup
-	wg.Add(2) // 1 response, 1 cancellation
+		var wg sync.WaitGroup
+		wg.Add(2)
+		var rspA []*chirp.Packet
+		loc.A.
+			Handle("666", func(context.Context, *chirp.Request) ([]byte, error) {
+				time.Sleep(time.Second)
+				return []byte("message in a bottle"), nil
+			}).
+			Handle("100", func(context.Context, *chirp.Request) ([]byte, error) {
+				return []byte("ok"), nil
+			}).
+			LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+				if dir == chirp.Send && pkt.Type == chirp.PacketResponse {
+					rspA = append(rspA, pkt)
+					wg.Done()
+				}
+				logA(pkt, dir)
+			})
 
-	var rspA []*chirp.Packet
-	loc.A.
-		Handle("666", func(context.Context, *chirp.Request) ([]byte, error) {
-			<-stop // block until released
-			return []byte("message in a bottle"), nil
-		}).
-		Handle("100", func(context.Context, *chirp.Request) ([]byte, error) {
-			return []byte("ok"), nil
-		}).
-		LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
-			if dir == chirp.Send && pkt.Type == chirp.PacketResponse {
-				rspA = append(rspA, pkt)
-				wg.Done()
+		// Verify that a call times out and returns control to the calling peer even
+		// if the remote peer has not acknowledged the cancellation yet.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		if rsp, err := loc.B.Call(ctx, "666", nil); err == nil {
+			t.Errorf("Call: unexpectedly succeeded: %v", rsp)
+		} else {
+			t.Logf("Call correctly failed: %v", err)
+		}
+
+		// Verify that the peer did not yield the unresolved request ID, which would
+		// otherwise be reused.
+		if rsp, err := loc.B.Call(context.Background(), "100", nil); err != nil {
+			t.Errorf("Call 100 unexpectedly failed: %v", err)
+		} else if got, want := string(rsp.Data), "ok"; got != want {
+			t.Errorf("Call 100: got %q, want %q", got, want)
+		}
+
+		wg.Wait()
+
+		// Make sure we got the CANCELED response (eventually) from the peer.
+		var found bool
+		for i, pkt := range rspA {
+			var rsp chirp.Response
+			if err := rsp.Decode(pkt.Payload); err != nil {
+				t.Fatalf("Decode packet %d: %v", i+1, err)
 			}
-			logA(pkt, dir)
-		})
-
-	done := make(chan struct{}) // closed when Call(666) returns
-	go func() {
-		defer close(stop)
-		select {
-		case <-done:
-			// OK, we got past the call
-		case <-time.After(5 * time.Second):
-			t.Error("Timeout waiting for Call to return")
+			if rsp.RequestID == 1 && rsp.Code == chirp.CodeCanceled {
+				found = true
+			}
 		}
-	}()
-
-	// Verify that a call times out and returns control to the calling peer even
-	// if the remote peer has not acknowledged the cancellation yet.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
-	if rsp, err := loc.B.Call(ctx, "666", nil); err == nil {
-		t.Errorf("Call: unexpectedly succeeded: %v", rsp)
-	} else {
-		t.Logf("Call correctly failed: %v", err)
-	}
-
-	// Verify that the peer did not yield the unresolved request ID, which would
-	// otherwise be reused.
-	if rsp, err := loc.B.Call(context.Background(), "100", nil); err != nil {
-		t.Errorf("Call 100 unexpectedly failed: %v", err)
-	} else if got, want := string(rsp.Data), "ok"; got != want {
-		t.Errorf("Call 100: got %q, want %q", got, want)
-	}
-
-	close(done) // also releases the blocked 666 handler
-	wg.Wait()
-
-	// Make sure we got the CANCELED response (eventually) from the peer.
-	var found bool
-	for i, pkt := range rspA {
-		var rsp chirp.Response
-		if err := rsp.Decode(pkt.Payload); err != nil {
-			t.Fatalf("Decode packet %d: %v", i+1, err)
+		if !found {
+			t.Error("No CANCELED response found for request 1")
 		}
-		if rsp.RequestID == 1 && rsp.Code == chirp.CodeCanceled {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("No CANCELED response found for request 1")
-	}
+	})
 }
 
 func TestProtocolFatal(t *testing.T) {
 	defer leaktest.Check(t)()
 
 	t.Run("BadMagic", func(t *testing.T) {
-		tw, ch := rawChannel()
-		p := chirp.NewPeer().Start(ch)
-		time.AfterFunc(time.Second, func() { p.Stop() })
+		synctest.Test(t, func(t *testing.T) {
+			tw, ch := rawChannel()
+			p := chirp.NewPeer().Start(ch)
+			time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'*', '?', 0, 2, 0, 0, 0, 0})
-		mustErr(t, p.Wait(), "invalid protocol magic")
+			tw.Write([]byte{'*', '?', 0, 2, 0, 0, 0, 0})
+			mustErr(t, p.Wait(), "invalid protocol magic")
+		})
 	})
 
 	t.Run("ShortHeader", func(t *testing.T) {
-		tw, ch := rawChannel()
-		p := chirp.NewPeer().Start(ch)
-		time.AfterFunc(time.Second, func() { p.Stop() })
+		synctest.Test(t, func(t *testing.T) {
+			tw, ch := rawChannel()
+			p := chirp.NewPeer().Start(ch)
+			time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0})
-		tw.Close()
-		mustErr(t, p.Wait(), "short packet header")
+			tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0})
+			tw.Close()
+			mustErr(t, p.Wait(), "short packet header")
+		})
 	})
 
 	t.Run("ShortPayload", func(t *testing.T) {
-		tw, ch := rawChannel()
-		p := chirp.NewPeer().Start(ch)
-		time.AfterFunc(time.Second, func() { p.Stop() })
+		synctest.Test(t, func(t *testing.T) {
+			tw, ch := rawChannel()
+			p := chirp.NewPeer().Start(ch)
+			time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0, 0, 10, 'a', 'b', 'c', 'd'})
-		tw.Close()
-		mustErr(t, p.Wait(), "short payload")
+			tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0, 0, 10, 'a', 'b', 'c', 'd'})
+			tw.Close()
+			mustErr(t, p.Wait(), "short payload")
+		})
 	})
 
 	t.Run("BadRequest", func(t *testing.T) {
-		tw, ch := rawChannel()
-		p := chirp.NewPeer().Start(ch)
-		time.AfterFunc(time.Second, func() { p.Stop() })
+		synctest.Test(t, func(t *testing.T) {
+			tw, ch := rawChannel()
+			p := chirp.NewPeer().Start(ch)
+			time.AfterFunc(time.Second, func() { p.Stop() })
 
-		tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0, 0, 1, 'X'})
-		mustErr(t, p.Wait(), "short request payload")
+			tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0, 0, 1, 'X'})
+			mustErr(t, p.Wait(), "short request payload")
+		})
 	})
 
 	t.Run("BadResponse", func(t *testing.T) {
-		tw, ch := rawChannel()
-		p := chirp.NewPeer().Start(ch)
-		time.AfterFunc(time.Second, func() { p.Stop() })
+		synctest.Test(t, func(t *testing.T) {
+			tw, ch := rawChannel()
+			p := chirp.NewPeer().Start(ch)
+			time.AfterFunc(time.Second, func() { p.Stop() })
 
-		chirp.Packet{
-			Type: chirp.PacketResponse,
-			Payload: chirp.Response{
-				RequestID: 100,
-				Code:      100,
-			}.Encode(),
-		}.WriteTo(tw)
-		mustErr(t, p.Wait(), "invalid result code")
+			chirp.Packet{
+				Type: chirp.PacketResponse,
+				Payload: chirp.Response{
+					RequestID: 100,
+					Code:      100,
+				}.Encode(),
+			}.WriteTo(tw)
+			mustErr(t, p.Wait(), "invalid result code")
+		})
 	})
 
 	t.Run("CloseChannel", func(t *testing.T) {
-		ready := make(chan struct{})
-		done := make(chan struct{})
-		stall := func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
-			defer close(done)
-			close(ready)
-			<-ctx.Done()
-			return nil, ctx.Err()
-		}
+		synctest.Test(t, func(t *testing.T) {
+			done := make(chan error)
+			stall := func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
+				defer close(done)
+				<-ctx.Done()
+				done <- ctx.Err()
+				return nil, ctx.Err()
+			}
 
-		pr, tw := io.Pipe()
-		tr, pw := io.Pipe()
-		ch := channel.IO(pr, pw)
-		p := chirp.NewPeer().Handle("22", stall).Start(ch)
-		defer p.Stop()
+			pr, tw := io.Pipe()
+			tr, pw := io.Pipe()
+			ch := channel.IO(pr, pw)
+			p := chirp.NewPeer().Handle("22", stall).Start(ch)
+			defer p.Stop()
 
-		chirp.Packet{
-			Type:    chirp.PacketRequest,
-			Payload: chirp.Request{RequestID: 666, Method: "22"}.Encode(),
-		}.WriteTo(tw)
+			chirp.Packet{
+				Type:    chirp.PacketRequest,
+				Payload: chirp.Request{RequestID: 666, Method: "22"}.Encode(),
+			}.WriteTo(tw)
 
-		// Wait for the method handler to be running.
-		<-ready
+			synctest.Wait()
 
-		// Simulate the channel failing by closing the pipe.
-		time.AfterFunc(100*time.Millisecond, func() { tw.Close() })
+			// Simulate the channel failing by closing the pipe.
+			tw.Close() // time.AfterFunc(100*time.Millisecond, func() { tw.Close() })
 
-		// Outbound calls MUST fail and report an error.
-		var buf [64]byte
-		nr, err := tr.Read(buf[:])
-		if err != nil {
-			t.Logf("Response correctly failed: %v", err)
-		} else {
-			t.Errorf("Got response %#q, wanted error", string(buf[:nr]))
-		}
+			// Outbound calls MUST fail and report an error.
+			var buf [64]byte
+			nr, err := tr.Read(buf[:])
+			if err != nil {
+				t.Logf("Read response correctly failed: %v", err)
+			} else {
+				t.Errorf("Got response %#q, wanted error", string(buf[:nr]))
+			}
 
-		// Inbound calls MUST be cancelled and their results discarded.
-		select {
-		case <-done:
-			t.Log("Handler exited OK")
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for handler to exit")
-		}
-		p.Stop()
+			// Inbound calls MUST be cancelled and their results discarded.
+			select {
+			case err := <-done:
+				t.Logf("Handler exited OK: %v", err)
+			case <-time.After(time.Second):
+				t.Error("Timed out waiting for handler to exit")
+			}
+			p.Stop()
+		})
 	})
 }
 
@@ -778,52 +779,54 @@ func TestConcurrency(t *testing.T) {
 }
 
 func TestDuplicate(t *testing.T) {
-	defer leaktest.Check(t)()
+	synctest.Test(t, func(t *testing.T) {
+		defer leaktest.Check(t)()
 
-	loc := peers.NewLocal()
+		loc := peers.NewLocal()
+		defer loc.Stop()
 
-	started := make(chan struct{})
-	loc.A.Handle("100", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
-		close(started)
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}).LogPackets(logPacket(t, "Peer A"))
+		loc.A.Handle("100", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+			<-ctx.Done()
+			t.Logf("Cancelled handler %+v", req)
+			return nil, ctx.Err()
+		}).LogPackets(logPacket(t, "Peer A"))
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+		var wg sync.WaitGroup
+		wg.Add(2)
 
-	var rspB []*chirp.Packet
-	loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
-		if dir == chirp.Recv {
-			rspB = append(rspB, pkt)
-			wg.Done()
+		var rspB []*chirp.Packet
+		loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			if dir == chirp.Recv {
+				rspB = append(rspB, pkt)
+				wg.Done()
+			}
+		})
+
+		// Send a request with ID 12345 and wait for its handler to be running.
+		loc.B.SendPacket(chirp.PacketRequest, chirp.Request{
+			RequestID: 12345,
+			Method:    "100",
+		}.Encode())
+
+		synctest.Wait()
+
+		// Now send another request for ID 12345.
+		loc.B.SendPacket(chirp.PacketRequest, chirp.Request{
+			RequestID: 12345,
+			Method:    "999",
+		}.Encode())
+
+		wg.Wait()
+
+		// Verify that we got two DUPLICATE_REQUEST responses.
+		wantResp := &chirp.Packet{
+			Type:    chirp.PacketResponse,
+			Payload: chirp.Response{RequestID: 12345, Code: chirp.CodeDuplicateID}.Encode(),
+		}
+		if diff := cmp.Diff(rspB, []*chirp.Packet{wantResp, wantResp}); diff != "" {
+			t.Errorf("Wrong responses (-got, +want):\n%s", diff)
 		}
 	})
-
-	// Send a request with ID 12345 and wait for its handler to be running.
-	loc.B.SendPacket(chirp.PacketRequest, chirp.Request{
-		RequestID: 12345,
-		Method:    "100",
-	}.Encode())
-	<-started
-
-	// Now send another request for ID 12345.
-	loc.B.SendPacket(chirp.PacketRequest, chirp.Request{
-		RequestID: 12345,
-		Method:    "999",
-	}.Encode())
-
-	wg.Wait()
-	loc.Stop()
-
-	// Verify that we got two DUPLICATE_REQUEST responses.
-	wantResp := &chirp.Packet{
-		Type:    chirp.PacketResponse,
-		Payload: chirp.Response{RequestID: 12345, Code: chirp.CodeDuplicateID}.Encode(),
-	}
-	if diff := cmp.Diff(rspB, []*chirp.Packet{wantResp, wantResp}); diff != "" {
-		t.Errorf("Wrong responses (-got, +want):\n%s", diff)
-	}
 }
 
 func runConcurrent(t *testing.T, pa, pb *chirp.Peer) {
