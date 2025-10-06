@@ -85,6 +85,9 @@ func TestVint30(t *testing.T) {
 		}
 		packed = packed[nb:]
 	}
+	if len(packed) != 0 {
+		t.Errorf("Extra data after unpacking: %#q", packed)
+	}
 }
 
 func TestBytes(t *testing.T) {
