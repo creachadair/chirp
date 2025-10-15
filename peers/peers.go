@@ -66,11 +66,14 @@ func Loop(ctx context.Context, acc Accepter, peer *chirp.Peer) error {
 		}
 
 		g.Go(func() error {
-			sctx, cancel := context.WithCancel(ctx)
-			defer cancel()
-
 			cp := peer.Clone().Start(ch)
-			go func() { <-sctx.Done(); cp.Stop() }()
+
+			// If ctx ends, stop the peer. Clean up the stop function if the peer
+			// ends before ctx, however, since ctx may run for a long time, and we
+			// do not want dead stop callbacks to pile up.
+			done := context.AfterFunc(ctx, func() { cp.Stop() })
+			defer done()
+
 			return cp.Wait()
 		})
 	}
@@ -87,20 +90,10 @@ type netAccepter struct {
 
 func (n netAccepter) Accept(ctx context.Context) (chirp.Channel, error) {
 	// A net.Listener does not obey a context, so simulate it by closing the
-	// listener if ctx ends. The ok channel allows the context watcher to clean
-	// up when we return before ctx ends.
-	ok := make(chan struct{})
-	defer close(ok)
-	taskgroup.Run(func() {
-		select {
-		case <-ctx.Done():
-			n.Listener.Close()
-		case <-ok:
-			// release the waiter
-		}
-	})
-
+	// listener if ctx ends.
+	stop := context.AfterFunc(ctx, func() { n.Listener.Close() })
 	conn, err := n.Listener.Accept()
+	stop()
 	if err != nil {
 		return nil, err
 	}
