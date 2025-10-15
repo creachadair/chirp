@@ -88,3 +88,34 @@ func (c IOChannel) Recv() (*chirp.Packet, error) {
 
 // Close implements a method of the [chirp.Channel] interface.
 func (c IOChannel) Close() error { return c.c.Close() }
+
+// NetConn implements the optional [NetConner] interface.  It returns a non-nil
+// value if c was constructed with a [net.Conn] as its writer.
+func (c IOChannel) NetConn() net.Conn {
+	if nc, ok := c.c.(net.Conn); ok {
+		return nc
+	}
+	return nil
+}
+
+// NetConn returns the [net.Conn] impementation underlying c, if one is
+// available, or else nil.  If c implements [NetConner] its corresponding
+// method will be called to locate a connection.  If c == nil, NetConn reports
+// nil.
+//
+// The [chirp.Channel] retains ownership of any [net.Conn] that is returned.
+// Note that reading, writing or otherwise changing the state of the resulting
+// connection may invalidate assumptions of the channel that uses it.
+func NetConn(c chirp.Channel) net.Conn {
+	if nc, ok := c.(NetConner); ok {
+		return nc.NetConn()
+	}
+	return nil
+}
+
+// NetConner is an optional interface that a [chirp.Channel] may implement to
+// expose an underlying [net.Conn] used by its implementation. The method
+// should report nil if its receiver does not have a [net.Conn].
+type NetConner interface {
+	NetConn() net.Conn
+}

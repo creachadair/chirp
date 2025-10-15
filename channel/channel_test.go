@@ -3,6 +3,7 @@
 package channel_test
 
 import (
+	"net"
 	"testing"
 
 	"github.com/creachadair/chirp"
@@ -63,5 +64,47 @@ func TestDirect(t *testing.T) {
 	} else {
 		t.Logf("Error OK: %v", err)
 	}
-
 }
+
+func TestNetConn(t *testing.T) {
+	dirA, dirB := channel.Direct()
+	pa, _ := net.Pipe()
+	io := channel.IO(net.Pipe())
+	t.Cleanup(func() { io.Close() })
+
+	tests := []struct {
+		input   chirp.Channel
+		hasConn bool
+	}{
+		{nil, false}, // but should not panic
+
+		// The Direct type from this library.
+		{dirA, false},
+		{dirB, false},
+
+		// The IOChannel type from this library.
+		{io, true},
+
+		// An arbitrary type implementing channel.NetConner.
+		{netConnStub{}, false},
+		{netConnStub{conn: pa}, true},
+
+		// An arbitrary type not implementing channel.NetConner.
+		{noConnStub{}, false},
+	}
+	for _, tc := range tests {
+		got := channel.NetConn(tc.input)
+		if (got != nil) != tc.hasConn {
+			t.Errorf("NetConn(%+v): has conn %v, want %v", tc.input, got != nil, tc.hasConn)
+		}
+	}
+}
+
+type noConnStub struct{ chirp.Channel }
+
+type netConnStub struct {
+	chirp.Channel // placeholder to satisfy the interface
+	conn          net.Conn
+}
+
+func (n netConnStub) NetConn() net.Conn { return n.conn }
