@@ -45,15 +45,15 @@ type Accepter interface {
 	Accept(context.Context) (chirp.Channel, error)
 }
 
-// Loop accepts connections from acc and starts a clone of peer for each one in
-// a goroutine. Changes to peer while Loop executes will affect connections
-// accepted after each change is made, but peer itself is not started unless
-// the caller does so explicitly.
+// Loop accepts connections from acc and starts a new peer in a goroutine for
+// each one.  The peer is constructed by calling newPeer.  Changes to the peer
+// while Loop executes will affect connections accepted after each change is
+// made. To start clones of a preconfigured peer, use [chirp.Peer.Clone].
 //
 // Loop runs until acc closes or ctx ends.  When ctx terminates, all running
-// peers are stopped. When acc closes, Loop waits for running peers to exit
+// peers are cancelled. When acc closes, Loop waits for running peers to exit
 // before returning.
-func Loop(ctx context.Context, acc Accepter, peer *chirp.Peer) error {
+func Loop(ctx context.Context, acc Accepter, newPeer func() *chirp.Peer) error {
 	var g taskgroup.Group
 	for {
 		ch, err := acc.Accept(ctx)
@@ -66,7 +66,7 @@ func Loop(ctx context.Context, acc Accepter, peer *chirp.Peer) error {
 		}
 
 		g.Go(func() error {
-			cp := peer.Clone().Start(ch)
+			cp := newPeer().Start(ch)
 
 			// If ctx ends, stop the peer. Clean up the stop function if the peer
 			// ends before ctx, however, since ctx may run for a long time, and we

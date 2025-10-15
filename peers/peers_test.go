@@ -121,7 +121,7 @@ func TestLoop(t *testing.T) {
 
 	base := chirp.NewPeer().Handle("100", slowEcho)
 	loop := taskgroup.Go(func() error {
-		return peers.Loop(ctx, peers.NetAccepter(lst), base)
+		return peers.Loop(ctx, peers.NetAccepter(lst), base.Clone)
 	})
 	t.Log("Started peer loop...")
 
