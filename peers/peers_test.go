@@ -5,7 +5,6 @@ package peers_test
 import (
 	"context"
 	mrand "math/rand/v2"
-	"net"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -23,13 +22,10 @@ func newTestNetwork(t *testing.T) *mnet.Network {
 	return n
 }
 
-func mustListen(t *testing.T, n *mnet.Network) net.Listener {
+func mustListen(t *testing.T, n *mnet.Network) mnet.Listener {
 	t.Helper()
-	lst, err := n.Listen("test", t.Name())
-	if err != nil {
-		t.Fatalf("Listen failed: %v", err)
-	}
-	t.Cleanup(func() { lst.Close() })
+	lst := n.MustListen("test", t.Name())
+	t.Logf("Listening at %q %q", lst.Addr().Network(), lst.Addr().String())
 	return lst
 }
 
@@ -41,7 +37,7 @@ func TestAccepter(t *testing.T) {
 			acc := peers.NetAccepter(lst)
 
 			time.AfterFunc(1*time.Second, func() {
-				conn, err := n.DialContext(t.Context(), lst.Addr().Network(), lst.Addr().String())
+				conn, err := lst.DialContext(t.Context())
 				if err != nil {
 					t.Errorf("Dial failed: %v", err)
 				}
@@ -105,7 +101,7 @@ func TestLoop(t *testing.T) {
 		})
 		for range numClients {
 			g.Go(func() error {
-				conn, err := n.Dial(lst.Addr().Network(), lst.Addr().String())
+				conn, err := lst.Dial()
 				if err != nil {
 					return err
 				}
