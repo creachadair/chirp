@@ -259,6 +259,7 @@ func TestParse(t *testing.T) {
 		packet.Vint30(12345),
 		packet.Literal("OK"),
 		packet.Vint30(67890),
+		packet.MBytes[string]{"full", "plate", "and", "packing", "steel"},
 	}
 
 	enc := want.Encode(nil)
@@ -266,7 +267,8 @@ func TestParse(t *testing.T) {
 
 	var b packet.Bytes
 	var v1, v2 packet.Vint30
-	nr, err := packet.Parse(enc, &b, &v1, packet.Literal("OK"), &v2)
+	var v3 packet.MBytes[string]
+	nr, err := packet.Parse(enc, &b, &v1, packet.Literal("OK"), &v2, &v3)
 	if err != nil {
 		t.Fatalf("Parse: unexpected error: %v", err)
 	}
@@ -276,7 +278,7 @@ func TestParse(t *testing.T) {
 		t.Errorf("Parse: used %d bytes, want %d", nr, len(enc))
 	}
 
-	if diff := cmp.Diff(packet.Slice{b, v1, packet.Literal("OK"), v2}, want); diff != "" {
+	if diff := cmp.Diff(packet.Slice{b, v1, packet.Literal("OK"), v2, v3}, want); diff != "" {
 		t.Errorf("Parse (-got, +want):\n%s", diff)
 	}
 }
