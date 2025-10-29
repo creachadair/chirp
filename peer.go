@@ -503,7 +503,7 @@ func (p *Peer) callLocal(ctx context.Context, method string, data []byte) (*Resp
 		}
 		return handler, nil
 	}()
-	if rc, ok := err.(resultCoder); ok { // most likely errUnkownMethod, see above
+	if rc, ok := err.(resultCoder); ok { // most likely errUnknownMethod, see above
 		return nil, &CallError{Response: &Response{Code: rc.ResultCode()}}
 	} else if err != nil {
 		return nil, callError(err)
