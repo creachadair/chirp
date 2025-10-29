@@ -21,6 +21,7 @@ import (
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/chirp/peers"
+	"github.com/creachadair/mds/mnet"
 	"github.com/creachadair/mds/mstr"
 	"github.com/creachadair/mds/mtest"
 	"github.com/creachadair/taskgroup"
@@ -1233,5 +1234,71 @@ func TestPeerMetrics(t *testing.T) {
 		check(t, loc.A, "calls_in", 0)
 		check(t, loc.B, "calls_in", 2)
 		check(t, loc.B, "calls_out", 0)
+	})
+}
+
+func TestPeer_RemoteAddr(t *testing.T) {
+	t.Run("Present", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			n := mnet.New(t.Name() + " network")
+			defer n.Close()
+
+			const clientAddr = "client.example.com:12345"
+			const serverAddr = "server.example.com:6789"
+			lst := n.MustListen("tcp", serverAddr)
+			d := n.Dialer("tcp", clientAddr)
+
+			p := chirp.NewPeer().Handle("check", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+				addr := chirp.ContextPeer(ctx).RemoteAddr()
+				t.Logf("Server got client address: %v", addr)
+				if addr.String() != clientAddr {
+					return nil, fmt.Errorf("got addr %q, want %q", addr.String(), clientAddr)
+				}
+				return []byte("ok"), nil
+			})
+			go func() {
+				conn, err := lst.Accept()
+				if err != nil {
+					t.Errorf("Listen: %v", err)
+					return
+				}
+				p.Start(channel.IO(conn, conn))
+				p.Wait()
+			}()
+
+			conn, err := d.DialContext(t.Context(), "tcp", serverAddr)
+			if err != nil {
+				t.Fatalf("Dial: %v", err)
+			}
+			t.Logf("Client got server address: %v", conn.RemoteAddr())
+
+			q := chirp.NewPeer().Start(channel.IO(conn, conn))
+			got, err := q.Call(t.Context(), "check", nil)
+			if err != nil {
+				t.Errorf("Call reported error: %v", err)
+			} else {
+				t.Logf("OK, call returned %v", got)
+			}
+			q.Stop()
+		})
+	})
+
+	t.Run("Absent", func(t *testing.T) {
+		loc := peers.NewLocal()
+		defer loc.Stop()
+
+		// Direct channels should not report a remote address.
+		if addr := loc.A.RemoteAddr(); addr != nil {
+			t.Errorf("Peer A: unexpected remote address: %v", addr)
+		}
+		if addr := loc.B.RemoteAddr(); addr != nil {
+			t.Errorf("Peer B: unexpected remote address: %v", addr)
+		}
+	})
+
+	t.Run("Unstarted", func(t *testing.T) {
+		if addr := chirp.NewPeer().RemoteAddr(); addr != nil {
+			t.Errorf("Unexpected remote address: %v", addr)
+		}
 	})
 }

@@ -442,6 +442,25 @@ func (p *Peer) NewContext(base func() context.Context) *Peer {
 	return p
 }
 
+// RemoteAddr reports the [net.Addr] of the remote peer. It returns nil if p is
+// not running, or if the [Channel] connecting p to the peer does not have a
+// recoverable address.
+func (p *Peer) RemoteAddr() net.Addr {
+	p.out.Lock()
+	defer p.out.Unlock()
+	if nc, ok := p.out.ch.(netConner); ok {
+		if c := nc.NetConn(); c != nil {
+			return c.RemoteAddr()
+		}
+	}
+	return nil
+}
+
+// netConner is the interface exported by [Channel] implementations that may
+// have an underlying [net.Conn] and know now to report it. The method may
+// return nil if a conn is not available.
+type netConner interface{ NetConn() net.Conn }
+
 // fail terminates all pending calls and updates the failure status.
 func (p *Peer) fail(err error) {
 	p.closeOut()
