@@ -15,4 +15,4 @@ updates.
 
 - [Specification](spec.md)
 - [Go implementation](https://godoc.org/github.com/creachadair/chirp)
-- [Usage example in the Go Playground](https://go.dev/play/p/mnxMmlucqZu)
+- [Usage example in the Go Playground](https://go.dev/play/p/cVIRW4LiQPQ)

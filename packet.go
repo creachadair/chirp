@@ -270,6 +270,8 @@ type ErrorData struct {
 	Data    []byte
 }
 
+func (e ErrorData) isEmpty() bool { return e.Code == 0 && e.Message == "" && len(e.Data) == 0 }
+
 // Error implements the error interface, allowing an ErrorData value to be used
 // as an error. This can be used by method handlers to control the error code
 // and auxiliary data reported to the caller.
@@ -282,6 +284,9 @@ func (e ErrorData) Error() string {
 
 // Encode encodes the error data in binary format.
 func (e ErrorData) Encode() []byte {
+	if e.isEmpty() {
+		return nil
+	}
 	msg := mstr.Trunc(e.Message, 65535)
 	mlen := len(msg)
 

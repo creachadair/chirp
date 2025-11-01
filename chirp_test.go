@@ -1025,6 +1025,15 @@ func TestRegression(t *testing.T) {
 			check(t, pval)
 		})
 	})
+
+	t.Run("EmptyError", func(t *testing.T) {
+		if got := string(chirp.ErrorData{}.Encode()); got != "" {
+			t.Errorf(`Encode empty error: got %q, want ""`, got)
+		}
+		if got := string(new(chirp.ErrorData).Encode()); got != "" {
+			t.Errorf(`Encode empty error pointer: got %q, want ""`, got)
+		}
+	})
 }
 
 func TestClone(t *testing.T) {
