@@ -1144,7 +1144,7 @@ func TestHandlerPanic(t *testing.T) {
 		t.Error("Error does not contain a call stack")
 	} else {
 		t.Logf("Got %d bytes of call stack (as desired):\n%s ...",
-			len(ce.Data), mstr.Trunc(string(ce.Data), 256))
+			len(ce.Data), mstr.Trunc(string(ce.Data), 550))
 	}
 	if !strings.Contains(err.Error(), failure) {
 		t.Errorf("Error does not contain %q: %v", failure, err)
