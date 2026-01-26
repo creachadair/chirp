@@ -37,7 +37,8 @@
 // defined by the Chirp specification. A Channel implementation must allow
 // concurrent use by one sender and one receiver.
 //
-// The channel package provides some basic implementations of this interface.
+// The [github.com/creachadair/chirp/channel] package provides some basic
+// implementations of this interface.
 //
 // # Calls
 //
