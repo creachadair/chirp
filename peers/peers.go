@@ -20,14 +20,7 @@ type Local struct {
 }
 
 // Stop shuts down both the peers and blocks until both have exited.
-func (p *Local) Stop() error {
-	aerr := p.A.Stop()
-	berr := p.B.Stop()
-	if aerr != nil {
-		return aerr
-	}
-	return berr
-}
+func (p *Local) Stop() error { return errors.Join(p.A.Stop(), p.B.Stop()) }
 
 // NewLocal creates a pair of in-memory connected peers, that communicate via a
 // direct channel without encoding.
