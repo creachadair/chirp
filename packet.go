@@ -152,12 +152,12 @@ func (r *Request) Decode(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("offset %d: %w", s.Offset(), err)
 	}
-	name, err := s.Get(int(mlen))
+	name, err := packet.Get[string](s, int(mlen))
 	if err != nil {
 		return fmt.Errorf("offset %d: %w", s.Offset(), err)
 	}
 	r.RequestID = id
-	r.Method = string(name)
+	r.Method = name
 	r.Data = nil
 	if s.Len() != 0 {
 		r.Data = s.Rest()
@@ -339,15 +339,15 @@ func (e *ErrorData) Decode(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("offset %d: message length: %w", s.Offset(), err)
 	}
-	msg, err := s.Get(int(mlen))
+	msg, err := packet.Get[string](s, int(mlen))
 	if err != nil {
 		return fmt.Errorf("offset %d: error message: %w", s.Offset(), err)
 	}
-	if !utf8.Valid(msg) {
+	if !utf8.ValidString(msg) {
 		return errors.New("error message is not valid UTF-8")
 	}
 	e.Code = code
-	e.Message = string(msg)
+	e.Message = msg
 	e.Data = nil
 	if s.Len() != 0 {
 		e.Data = s.Rest()

@@ -107,27 +107,6 @@ func (s *Scanner) Byte() (byte, error) {
 	return out, nil
 }
 
-// Get returns a slice of exactly n bytes from the head of the input.
-// If the full requested amount is not available, a partial result is returned
-// along with an error. The reported slice is only valid until a subsequent
-// call of a method of s, and the caller must not modify its contents.
-func (s *Scanner) Get(n int) ([]byte, error) { return rawString[[]byte](s, n) }
-
-// GetString returns a string of exactly n bytes from the head of the input.
-// If the full requested amount is not available, a partial result is returned
-// along with an error.
-func (s *Scanner) GetString(n int) (string, error) { return rawString[string](s, n) }
-
-func rawString[Str ~string | ~[]byte](s *Scanner, n int) (Str, error) {
-	if len(s.rest) < n {
-		return Str(s.rest), fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), n, io.ErrUnexpectedEOF)
-	}
-	s.offset += n
-	out := Str(s.rest[:n])
-	s.rest = s.rest[n:]
-	return out, nil
-}
-
 // VLen reports the encoded size in bytes of a length-prefixed encoding of s,
 // where the length is encoded as a [Vint30].
 func VLen[Str ~string | ~[]byte](s Str) int { return Vint30(len(s)).Size() + len(s) }
@@ -172,15 +151,6 @@ func (s *Scanner) Uint32() (uint32, error) {
 	return out, nil
 }
 
-// VString parses a single length-prefixed string value from the head of the input.
-// The length must be encoded as a [Vint30].
-func (s *Scanner) VString() (string, error) { return parseVstring[string](s) }
-
-// VBytes parses a single length-prefixed byte slice from the head of the input.
-// The length must be encoded as a [Vint30]. On success, the resulting slice
-// aliases the input, and must not be modified.
-func (s *Scanner) VBytes() ([]byte, error) { return parseVstring[[]byte](s) }
-
 // Len reports the number of remaining unconsumed input bytes in s.
 func (s *Scanner) Len() int { return len(s.rest) }
 
@@ -192,7 +162,11 @@ func (s *Scanner) Offset() int { return s.offset }
 // and the caller must not modify its contents.
 func (s *Scanner) Rest() []byte { return s.rest }
 
-func parseVstring[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
+// VGet parses a single length-prefixed string from the head of s.
+// The length must be encoded as a [Vint30].
+// When the result is a slice, the value is only valid until a subsequent
+// call to a method of s, and the caller must not modify its contents.
+func VGet[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
 	nb, err := s.Vint30()
 	if err != nil {
 		return out, err
@@ -203,6 +177,21 @@ func parseVstring[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
 	s.offset += nb
 	out = Str(s.rest[:nb])
 	s.rest = s.rest[nb:]
+	return out, nil
+}
+
+// Get returns a string of exactly n bytes from the head of the input.
+// If the full requested amount is not available, a partial result is returned
+// along with an error. When the result is a slice, the value is only valid
+// until a subsequent call of a method of s, and the caller must not modify its
+// contents.
+func Get[Str ~string | ~[]byte](s *Scanner, n int) (Str, error) {
+	if len(s.rest) < n {
+		return Str(s.rest), fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), n, io.ErrUnexpectedEOF)
+	}
+	s.offset += n
+	out := Str(s.rest[:n])
+	s.rest = s.rest[n:]
 	return out, nil
 }
 
