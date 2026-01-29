@@ -9,6 +9,7 @@ import (
 	"io"
 	"unicode/utf8"
 
+	"github.com/creachadair/chirp/packet"
 	"github.com/creachadair/mds/mstr"
 )
 
@@ -21,10 +22,12 @@ type Packet struct {
 
 // WriteTo writes the packet to w in binary format. It satisfies [io.WriterTo].
 func (p Packet) WriteTo(w io.Writer) (int64, error) {
-	buf := make([]byte, 0, 8)
-	buf = append(buf, '\xc7', p.Protocol, byte(p.Type>>8), byte(p.Type&255))
-	buf = binary.BigEndian.AppendUint32(buf, uint32(len(p.Payload)))
-	nw, err := w.Write(buf)
+	var b packet.Builder
+	b.Grow(8)
+	b.Put('\xc7', p.Protocol)
+	b.Uint16(uint16(p.Type))
+	b.Uint32(uint32(len(p.Payload)))
+	nw, err := w.Write(b.Bytes())
 	if err != nil {
 		return int64(nw), err
 	}
@@ -129,28 +132,35 @@ func (r Request) Encode() []byte {
 	if mlen > 255 {
 		panic(fmt.Sprintf("method name is %d (>255) bytes", mlen))
 	}
-	buf := make([]byte, 0, 4+1+mlen+len(r.Data)) // 4 request ID, 1 method name length
-	buf = binary.BigEndian.AppendUint32(buf, r.RequestID)
-	buf = append(buf, byte(mlen))
-	buf = append(buf, r.Method...)
-	buf = append(buf, r.Data...)
-	return buf
+	var b packet.Builder
+	b.Grow(4 + 1 + mlen + len(r.Data)) // 4 request ID, 1 method name length
+	b.Uint32(r.RequestID)
+	b.Put(byte(mlen))
+	packet.Append(&b, r.Method)
+	packet.Append(&b, r.Data)
+	return b.Bytes()
 }
 
 // Decode decodes data into a Chirp v0 request payload.
 func (r *Request) Decode(data []byte) error {
-	if len(data) < 5 { // 4 request ID, 1 method name length
-		return fmt.Errorf("short request payload (%d bytes)", len(data))
+	s := packet.NewScanner(data)
+	id, err := s.Uint32()
+	if err != nil {
+		return fmt.Errorf("offset %d: %w", s.Offset(), err)
 	}
-	r.RequestID = binary.BigEndian.Uint32(data[0:])
-	mlen := int(data[4])
-	if 5+mlen > len(data) {
-		return fmt.Errorf("short method name (%d > %d bytes)", 5+mlen, len(data))
+	mlen, err := s.Byte()
+	if err != nil {
+		return fmt.Errorf("offset %d: %w", s.Offset(), err)
 	}
-	r.Method = string(data[5 : 5+mlen])
+	name, err := s.Get(int(mlen))
+	if err != nil {
+		return fmt.Errorf("offset %d: %w", s.Offset(), err)
+	}
+	r.RequestID = id
+	r.Method = string(name)
 	r.Data = nil
-	if len(data[5+mlen:]) > 0 {
-		r.Data = data[5+mlen:]
+	if s.Len() != 0 {
+		r.Data = s.Rest()
 	}
 	return nil
 }
@@ -169,26 +179,33 @@ type Response struct {
 
 // Encode encodes the response data in binary format.
 func (r Response) Encode() []byte {
-	buf := make([]byte, 0, 4+1+len(r.Data)) // 4 request ID, 1 code
-	buf = binary.BigEndian.AppendUint32(buf, r.RequestID)
-	buf = append(buf, byte(r.Code))
-	return append(buf, r.Data...)
+	var b packet.Builder
+	b.Grow(4 + 1 + len(r.Data)) // 4 request ID, 1 code
+	b.Uint32(r.RequestID)
+	b.Put(byte(r.Code))
+	packet.Append(&b, r.Data)
+	return b.Bytes()
 }
 
 // Decode decodes data into a Chirp v0 response payload.
 func (r *Response) Decode(data []byte) error {
-	if len(data) < 5 { // 4 request ID, 1 code
-		return fmt.Errorf("short response payload (%d bytes)", len(data))
+	s := packet.NewScanner(data)
+	id, err := s.Uint32()
+	if err != nil {
+		return fmt.Errorf("offset %d: %w", s.Offset(), err)
 	}
-	r.RequestID = binary.BigEndian.Uint32(data[0:])
-	r.Code = ResultCode(data[4])
+	code, err := s.Byte()
+	if err != nil {
+		return fmt.Errorf("offset %d: %w", s.Offset(), err)
+	}
+	r.RequestID = id
+	r.Code = ResultCode(code)
 	if r.Code > CodeServiceError {
 		return fmt.Errorf("invalid result code %d", r.Code)
 	}
-	if len(data[5:]) > 0 {
-		r.Data = data[5:]
-	} else {
-		r.Data = nil
+	r.Data = nil
+	if s.Len() != 0 {
+		r.Data = s.Rest()
 	}
 	return nil
 }
@@ -290,11 +307,13 @@ func (e ErrorData) Encode() []byte {
 	msg := mstr.Trunc(e.Message, 65535)
 	mlen := len(msg)
 
-	buf := make([]byte, 0, 4+mlen+len(e.Data)) // 2 code, 2 length
-	buf = binary.BigEndian.AppendUint16(buf, e.Code)
-	buf = binary.BigEndian.AppendUint16(buf, uint16(mlen))
-	buf = append(buf, msg...)
-	return append(buf, e.Data...)
+	var b packet.Builder
+	b.Grow(4 + mlen + len(e.Data)) // 2 for code, 2 for message length
+	b.Uint16(e.Code)
+	b.Uint16(uint16(mlen))
+	packet.Append(&b, msg)
+	packet.Append(&b, e.Data)
+	return b.Bytes()
 }
 
 func trimData(data []byte) string {
@@ -310,23 +329,28 @@ func (e *ErrorData) Decode(data []byte) error {
 	if len(data) == 0 {
 		*e = ErrorData{}
 		return nil
-	} else if len(data) < 4 {
-		return fmt.Errorf("invalid error data (%d bytes)", len(data))
 	}
-
-	mlen := int(binary.BigEndian.Uint16(data[2:]))
-	if 4+mlen > len(data) {
-		return fmt.Errorf("error message truncated (%d > %d bytes)", 4+mlen, len(data))
+	s := packet.NewScanner(data)
+	code, err := s.Uint16()
+	if err != nil {
+		return fmt.Errorf("offset %d: error code: %w", s.Offset(), err)
 	}
-	msg := data[4 : 4+mlen]
+	mlen, err := s.Uint16()
+	if err != nil {
+		return fmt.Errorf("offset %d: message length: %w", s.Offset(), err)
+	}
+	msg, err := s.Get(int(mlen))
+	if err != nil {
+		return fmt.Errorf("offset %d: error message: %w", s.Offset(), err)
+	}
 	if !utf8.Valid(msg) {
 		return errors.New("error message is not valid UTF-8")
 	}
-	e.Code = binary.BigEndian.Uint16(data[0:])
+	e.Code = code
 	e.Message = string(msg)
-	e.Data = data[4+mlen:]
-	if len(e.Data) == 0 {
-		e.Data = nil
+	e.Data = nil
+	if s.Len() != 0 {
+		e.Data = s.Rest()
 	}
 	return nil
 }

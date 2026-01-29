@@ -3,7 +3,208 @@
 // Package packet provides support for encoding and decoding binary packet data.
 package packet
 
-import "slices"
+import (
+	"encoding/binary"
+	"fmt"
+	"io"
+
+	"github.com/creachadair/mds/value"
+)
+
+// A Builder is a buffer that accumulates data into a packet. The zero value is
+// ready for use as an empty builder.
+type Builder struct {
+	buf []byte
+}
+
+// Bool appends a Boolean to b. The encoding is a single byte with value 0 or 1.
+func (b *Builder) Bool(ok bool) { b.Put(value.Cond[byte](ok, 1, 0)) }
+
+// Put appends the specified bytes to v in order.
+func (b *Builder) Put(vs ...byte) { b.buf = append(b.buf, vs...) }
+
+// Uint16 appends v to b in big-endian order.
+func (b *Builder) Uint16(v uint16) { b.buf = binary.BigEndian.AppendUint16(b.buf, v) }
+
+// Uint32 appends v to b in big-endian order.
+func (b *Builder) Uint32(v uint32) { b.buf = binary.BigEndian.AppendUint32(b.buf, v) }
+
+// Vint30 appends a [Vint30] value to b.
+func (b *Builder) Vint30(v uint32) { b.buf = Vint30(v).Append(b.buf) }
+
+// VString appends a length-prefixed string to b. The length is encoded as a [Vint30].
+func (b *Builder) VString(s string) { vstring(b, s) }
+
+// VBytes appends a length-prefixed string to b. The length is encoded as a [Vint30].
+func (b *Builder) VBytes(data []byte) { vstring(b, data) }
+
+// Len reports the number of bytes currently in the buffer.
+func (b *Builder) Len() int { return len(b.buf) }
+
+// Bytes reports the current contents of the buffer. The builder retains ownership
+// of the reported slice, and the caller must not retain or modify its contents
+// unless b will no longer be accessed.
+func (b *Builder) Bytes() []byte { return b.buf }
+
+// Reset discards the contents of b and leaves it empty.
+func (b *Builder) Reset() { b.buf = b.buf[:0] }
+
+// Grow resizes the internal buffer of b if necessary to ensure that at least n
+// more bytes can be added without triggering another allocation.
+func (b *Builder) Grow(n int) {
+	want := len(b.buf) + n
+	if cap(b.buf) < want {
+		r := make([]byte, len(b.buf), max(want, 2*cap(b.buf)))
+		copy(r, b.buf)
+		b.buf = r
+	}
+}
+
+// Append appends the contents of v to b with no framing.
+func Append[Str ~string | ~[]byte](b *Builder, v Str) { b.buf = append(b.buf, v...) }
+
+func vstring[Str ~string | ~[]byte](b *Builder, s Str) {
+	b.buf = Vint30(len(s)).Append(b.buf)
+	b.buf = append(b.buf, s...)
+}
+
+// A Scanner reads encoded values from the contents of a packet.
+// The methods of a scanner return [io.EOF] when no further input is available.
+// Incomplete values report [io.ErrUnexpectedEOF].
+type Scanner struct {
+	input  []byte
+	rest   []byte
+	offset int // of reset from input
+}
+
+// NewScanner constructs a [Scanner] that consumes data from input.
+// The scanner does not modify the contents of input, but retain slices
+// into it, so the caller should ensure it is not modified while the scanner
+// is in use.
+func NewScanner[Str ~string | ~[]byte](input Str) *Scanner {
+	data := []byte(input)
+	return &Scanner{input: data, rest: data}
+}
+
+// Bool scans a single byte from the head of the input and converts it into a
+// Boolean value (0 means false, non-zero means true).
+func (s *Scanner) Bool() (bool, error) {
+	b, err := s.Byte()
+	if err != nil {
+		return false, err
+	}
+	return b != 0, nil
+}
+
+// Byte scans a single byte from the head of the input.
+func (s *Scanner) Byte() (byte, error) {
+	if len(s.rest) == 0 {
+		return 0, io.ErrUnexpectedEOF
+	}
+	s.offset++
+	out := s.rest[0]
+	s.rest = s.rest[1:]
+	return out, nil
+}
+
+// Get returns a slice of exactly n bytes from the head of the input.
+// If the full requested amount is not available, a partial result is returned
+// along with an error. The reported slice is only valid until a subsequent
+// call of a method of s, and the caller must not modify its contents.
+func (s *Scanner) Get(n int) ([]byte, error) { return rawString[[]byte](s, n) }
+
+// GetString returns a string of exactly n bytes from the head of the input.
+// If the full requested amount is not available, a partial result is returned
+// along with an error.
+func (s *Scanner) GetString(n int) (string, error) { return rawString[string](s, n) }
+
+func rawString[Str ~string | ~[]byte](s *Scanner, n int) (Str, error) {
+	if len(s.rest) < n {
+		return Str(s.rest), fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), n, io.ErrUnexpectedEOF)
+	}
+	s.offset += n
+	out := Str(s.rest[:n])
+	s.rest = s.rest[n:]
+	return out, nil
+}
+
+// VLen reports the encoded size in bytes of a length-prefixed encoding of s,
+// where the length is encoded as a [Vint30].
+func VLen[Str ~string | ~[]byte](s Str) int { return Vint30(len(s)).Size() + len(s) }
+
+// Vint30 parses a single [Vint30] value from the head of the input.
+func (s *Scanner) Vint30() (int, error) {
+	if len(s.rest) == 0 {
+		return 0, io.EOF
+	}
+	nb := int(s.rest[0]%4) + 1
+	if len(s.rest) < nb {
+		return 0, io.ErrUnexpectedEOF
+	}
+	var w uint32
+	for i := nb - 1; i >= 0; i-- {
+		w = (w * 256) + uint32(s.rest[i])
+	}
+	s.offset += nb
+	s.rest = s.rest[nb:]
+	return int(w >> 2), nil
+}
+
+// Uint16 parses a big-endian uint16 value from the head of the input.
+func (s *Scanner) Uint16() (uint16, error) {
+	if len(s.rest) < 2 {
+		return 0, fmt.Errorf("value truncate (%d < 2 bytes): %w", len(s.rest), io.ErrUnexpectedEOF)
+	}
+	s.offset += 2
+	out := binary.BigEndian.Uint16(s.rest[:2])
+	s.rest = s.rest[2:]
+	return out, nil
+}
+
+// Uint32 parses a big-endian uint32 value from the head of the input.
+func (s *Scanner) Uint32() (uint32, error) {
+	if len(s.rest) < 4 {
+		return 0, fmt.Errorf("value truncated (%d < 4 bytes): %w", len(s.rest), io.ErrUnexpectedEOF)
+	}
+	s.offset += 4
+	out := binary.BigEndian.Uint32(s.rest[:4])
+	s.rest = s.rest[4:]
+	return out, nil
+}
+
+// VString parses a single length-prefixed string value from the head of the input.
+// The length must be encoded as a [Vint30].
+func (s *Scanner) VString() (string, error) { return parseVstring[string](s) }
+
+// VBytes parses a single length-prefixed byte slice from the head of the input.
+// The length must be encoded as a [Vint30]. On success, the resulting slice
+// aliases the input, and must not be modified.
+func (s *Scanner) VBytes() ([]byte, error) { return parseVstring[[]byte](s) }
+
+// Len reports the number of remaining unconsumed input bytes in s.
+func (s *Scanner) Len() int { return len(s.rest) }
+
+// Offset reports the offset (0-based) of the next unconsumed input byte in s.
+func (s *Scanner) Offset() int { return s.offset }
+
+// Rest returns a slice of the remaining unconsumed input of s.
+// The reported slice is only valid until the next call to a method of s,
+// and the caller must not modify its contents.
+func (s *Scanner) Rest() []byte { return s.rest }
+
+func parseVstring[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
+	nb, err := s.Vint30()
+	if err != nil {
+		return out, err
+	}
+	if len(s.rest) < nb {
+		return out, fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), nb, io.ErrUnexpectedEOF)
+	}
+	s.offset += nb
+	out = Str(s.rest[:nb])
+	s.rest = s.rest[nb:]
+	return out, nil
+}
 
 // Vint30 is an unsigned 30-bit integer that uses a variable-width encoding
 // from 1 to 4 bytes.
@@ -31,9 +232,9 @@ type Vint30 uint32
 // MaxVint30 is the maximum value that can be encoded by a Vint30.
 const MaxVint30 = 1<<30 - 1
 
-// EncodedLen reports the number of bytes needed to encode v.
-// If v is too large to be represented, EncodedLen returns -1.
-func (v Vint30) EncodedLen() int {
+// Size reports the number of bytes required to encode v. If v is too large to
+// be encoded, Size returns -1.
+func (v Vint30) Size() int {
 	switch {
 	case v < (1 << 6):
 		return 1
@@ -48,10 +249,10 @@ func (v Vint30) EncodedLen() int {
 	}
 }
 
-// Encode appends the encoded value of v to buf, and returns the updated slice.
+// Append appends the encoded value of v to buf, and returns the updated slice.
 // It panics if v is out of range.
-func (v Vint30) Encode(buf []byte) []byte {
-	s := v.EncodedLen()
+func (v Vint30) Append(buf []byte) []byte {
+	s := v.Size()
 	if s < 0 {
 		panic("value out of range")
 	}
@@ -62,191 +263,4 @@ func (v Vint30) Encode(buf []byte) []byte {
 		w /= 256
 	}
 	return append(buf, tmp[:s]...)
-}
-
-// ParseVint30 decodes a prefix of buf as a Vint30, and reports the number of
-// bytes consumed by the encoding. If buf does not begin with a valid encoding,
-// it returns -1, 0.
-func ParseVint30(buf []byte) (int, Vint30) {
-	if len(buf) == 0 {
-		return -1, 0 // no valid encoding
-	}
-	s := int(buf[0]%4) + 1
-	if len(buf) < s {
-		return -1, 0 // incomplete value
-	}
-	var w uint32
-	for i := s - 1; i >= 0; i-- {
-		w = (w * 256) + uint32(buf[i])
-	}
-	return s, Vint30(w / 4)
-}
-
-// MBytes is a slice of byte slices or strings that encode to the concatenation
-// of each with a Vint30 prefix.
-type MBytes[T ~string | ~[]byte] []T
-
-// EncodedLen reports the number of bytes needed to encode m.
-func (m MBytes[T]) EncodedLen() int {
-	var n int
-	for _, bs := range m {
-		n += Vint30(len(bs)).EncodedLen() + len(bs)
-	}
-	return n
-}
-
-func (m MBytes[T]) Encode(buf []byte) []byte {
-	buf = slices.Grow(buf, m.EncodedLen())
-	for _, bs := range m {
-		buf = Bytes(bs).Encode(buf)
-	}
-	return buf
-}
-
-// Bytes is a slice of bytes that encodes to a Vint30 prefix followed by the
-// contents of the specified slice.
-type Bytes []byte
-
-// EncodedLen reports the number of bytes needed to encode b.
-// If b is too long to be represented, EncodedLen returns -1.
-func (b Bytes) EncodedLen() int {
-	if len(b) > MaxVint30 {
-		return -1
-	}
-	return Vint30(len(b)).EncodedLen() + len(b)
-}
-
-// Encode appends the encoding of b to buf, and returns the updated slice.
-// It panics if b is too long to be encoded.
-func (b Bytes) Encode(buf []byte) []byte {
-	out := Vint30(len(b)).Encode(buf)
-	return append(out, b...)
-}
-
-// ParseBytes decodes a length-prefixed sliced of bytes from the front of buf
-// and reports the number of bytes consumed by the encoding. If buf does not
-// begin with a valud encoding, it returns -1, nil.
-//
-// A successful ParseBytes returns a slice that aliases input array.  The
-// caller must copy the bytes if the underlying data are expected to change.
-func ParseBytes(buf []byte) (int, Bytes) {
-	nb, blen := ParseVint30(buf)
-	if nb < 0 {
-		return -1, nil // invalid length prefix
-	}
-	end := nb + int(blen)
-	if len(buf) < end {
-		return -1, nil // data are truncated
-	}
-	return end, buf[nb:end]
-}
-
-// Literal is a literal string that encodes as the sequence of bytes comprising
-// the string without padding or framing.
-type Literal string
-
-// EncodedLen reports the number of bytes needed to encode s, which is equal
-// to the length of s in bytes.
-func (s Literal) EncodedLen() int { return len(s) }
-
-// Encode appends the encoded value of s to buf and returns the updated slice.
-func (s Literal) Encode(buf []byte) []byte { return append(buf, s...) }
-
-// ParseLiteral decodes the specified string from the front of buf, and reports
-// the number of bytes consumed. If len(buf) < len(s) or the prefix is not
-// equal to s, it returns -1, nil. The slice returned shares storage with buf.
-func ParseLiteral(s string, buf []byte) (int, []byte) {
-	if len(buf) < len(s) || string(buf[:len(s)]) != s {
-		return -1, nil
-	}
-	return len(s), buf[:len(s)]
-}
-
-// Bool is a bool that encodes as a single byte with value 0 or 1.
-type Bool bool
-
-// EncodedLen reports the number of bytes needed to encode b, which is 1.
-func (Bool) EncodedLen() int { return 1 }
-
-// Encode appends the encoded value of b to buf and returns the updated slice.
-func (b Bool) Encode(buf []byte) []byte {
-	if b {
-		return append(buf, 1)
-	}
-	return append(buf, 0)
-}
-
-// ParseBool decodes a single byte from the front of buf as a Bool, and reports
-// the number of bytes consumed (1), or -1 if buf is empty. A 0 means false and
-// any non-zero value means true.
-func ParseBool(buf []byte) (int, Bool) {
-	switch {
-	case len(buf) == 0:
-		return -1, false
-	case buf[0] == 0:
-		return 1, false
-	default:
-		return 1, true
-	}
-}
-
-// Raw is a slice of bytes that encodes literally without framing.
-type Raw []byte
-
-// EncodedLen reports the number of bytes needed to encode r, which is len(r).
-func (r Raw) EncodedLen() int { return len(r) }
-
-// Encode appends the bytes of r to buf, and returns the updated slice.
-func (r Raw) Encode(buf []byte) []byte { return append(buf, r...) }
-
-// ParseRaw decodes a slice of n bytes from the front of buf, and reports the
-// number of bytes consumed. If len(buf) < n, it returns -1, nil.
-func ParseRaw(n int, buf []byte) (int, Raw) {
-	if len(buf) < n {
-		return -1, nil
-	}
-	return n, buf[:n]
-}
-
-// An Encoder is a value that supports being encoded into binary form.
-type Encoder interface {
-	// EncodedLen reports the number of bytes needed to encode its receiver.
-	// If the value cannot be encoded, EncodedLen must return -1.
-	EncodedLen() int
-
-	// Encode appends the encoded representation of the receiver to buf, and
-	// returns the updated slice. If the value cannot be encoded, Encode must
-	// panic.
-	Encode([]byte) []byte
-}
-
-// A Slice is a sequence of Encoders that itself implements the Encoder
-// interface.  It encodes as the concatenation of the encodings of its
-// elements.
-type Slice []Encoder
-
-// EncodedLen implements the corresponding method of the Encoder interface.
-// It reports the total length required to encode the elements of s, of -1 if
-// any of the values cannot be encoded.
-func (s Slice) EncodedLen() int {
-	var sum int
-	for _, v := range s {
-		n := v.EncodedLen()
-		if n < 0 {
-			return -1
-		}
-		sum += n
-	}
-	return sum
-}
-
-// Encode implements the corresponding method of the Encoder interface.
-// It panics if any element of s cannot be encoded.
-// It returns buf unmodified if len(s) == 0.
-func (s Slice) Encode(buf []byte) []byte {
-	cur := slices.Grow(buf, s.EncodedLen())
-	for _, v := range s {
-		cur = v.Encode(cur)
-	}
-	return cur
 }

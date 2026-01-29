@@ -78,9 +78,9 @@ and changes to those values do not persist after the subpattern ends.
 						return fmt.Errorf("extra arguments: %q", rest)
 					}
 					if flags.Quoted {
-						fmt.Printf("%q\n", enc.Encode(nil))
+						fmt.Printf("%q\n", enc.Bytes())
 					} else {
-						os.Stdout.Write(enc.Encode(nil))
+						os.Stdout.Write(enc.Bytes())
 					}
 					return nil
 				},
@@ -92,26 +92,26 @@ and changes to those values do not persist after the subpattern ends.
 	command.RunOrFail(root.NewEnv(nil), os.Args[1:])
 }
 
-func formatData(pat string, args []string) (packet.Slice, []string, error) {
+func formatData(pat string, args []string) (packet.Builder, []string, error) {
 	size := byte('?')
+	var enc packet.Builder
 	var byteOrder binary.AppendByteOrder = binary.BigEndian
-	packSize := func(n int) packet.Encoder {
+	packSize := func(n int) {
 		switch size {
 		case '?':
-			return packet.Vint30(n)
+			enc.Vint30(uint32(n))
 		case '@':
-			return packet.Raw(byteOrder.AppendUint16(nil, uint16(n)))
+			packet.Append(&enc, byteOrder.AppendUint16(nil, uint16(n)))
 		case '$':
-			return packet.Raw(byteOrder.AppendUint32(nil, uint32(n)))
+			packet.Append(&enc, byteOrder.AppendUint32(nil, uint32(n)))
 		case '*':
-			return packet.Raw(byteOrder.AppendUint64(nil, uint64(n)))
+			packet.Append(&enc, byteOrder.AppendUint64(nil, uint64(n)))
 		case '!':
-			return packet.Raw([]byte{byte(n)})
+			enc.Put(byte(n))
 		default:
 			panic("invalid size type: " + string(size))
 		}
 	}
-	var enc packet.Slice
 	var i int
 	for ; i < len(pat); i++ {
 		c := pat[i]
@@ -135,81 +135,83 @@ func formatData(pat string, args []string) (packet.Slice, []string, error) {
 			// Sub-pattern (sub) becomes vdata of the contents.
 			sub, ok := cutParen(pat[i+1:], '(', ')')
 			if !ok {
-				return nil, nil, errors.New("missing close parenthesis")
+				return enc, nil, errors.New("missing close parenthesis")
 			}
 			sd, sa, err := formatData(sub, args)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid subpattern: %w", err)
+				return enc, nil, fmt.Errorf("invalid subpattern: %w", err)
 			}
-			enc = append(enc, packSize(sd.EncodedLen()), sd)
+			packSize(sd.Len())
+			packet.Append(&enc, sd.Bytes())
 			args = sa
 			i += len(sub) + 1
 			continue
 		default:
-			return nil, nil, fmt.Errorf("invalid pattern word %c", c)
+			return enc, nil, fmt.Errorf("invalid pattern word %c", c)
 		}
 
 		if len(args) == 0 {
-			return nil, nil, fmt.Errorf("missing argument for %c", c)
+			return enc, nil, fmt.Errorf("missing argument for %c", c)
 		}
 		switch c {
 		case 'b':
 			dec, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(args[0], "="))
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid base64: %w", err)
+				return enc, nil, fmt.Errorf("invalid base64: %w", err)
 			}
-			enc = append(enc, packet.Raw(dec))
+			packet.Append(&enc, dec)
 		case 'p':
 			if len(args[0]) > 255 {
-				return nil, nil, fmt.Errorf("length %d > 255 too long for p", len(args[0]))
+				return enc, nil, fmt.Errorf("length %d > 255 too long for p", len(args[0]))
 			}
-			enc = append(enc, packet.Raw([]byte{byte(len(args[0]))}), packet.Literal(args[0]))
+			enc.Put(byte(len(args[0])))
+			packet.Append(&enc, args[0])
 		case 'q':
 			dec, err := strconv.Unquote(`"` + args[0] + `"`)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid string: %w", err)
+				return enc, nil, fmt.Errorf("invalid string: %w", err)
 			}
-			enc = append(enc, packet.Literal(dec))
+			packet.Append(&enc, dec)
 		case 'r':
-			enc = append(enc, packet.Literal(args[0]))
+			packet.Append(&enc, args[0])
 		case 's':
-			enc = append(enc, packet.Bytes(args[0]))
+			enc.VString(args[0])
 		case '%':
 			v, err := strconv.ParseBool(args[0])
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid bool: %w", err)
+				return enc, nil, fmt.Errorf("invalid bool: %w", err)
 			}
-			enc = append(enc, packet.Bool(v))
+			enc.Bool(v)
 		case 'v':
 			v, err := strconv.ParseUint(args[0], 10, 30)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid vint30: %w", err)
+				return enc, nil, fmt.Errorf("invalid vint30: %w", err)
 			}
-			enc = append(enc, packet.Vint30(v))
+			enc.Vint30(uint32(v))
 		case '1':
 			v, err := strconv.ParseUint(args[0], 10, 8)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid byte: %w", err)
+				return enc, nil, fmt.Errorf("invalid byte: %w", err)
 			}
-			enc = append(enc, packet.Raw([]byte{byte(v)}))
+			enc.Put(byte(v))
 		case '2':
 			v, err := strconv.ParseUint(args[0], 10, 16)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid uint16: %w", err)
+				return enc, nil, fmt.Errorf("invalid uint16: %w", err)
 			}
-			enc = append(enc, packet.Raw(byteOrder.AppendUint16(nil, uint16(v))))
+			packet.Append(&enc, byteOrder.AppendUint16(nil, uint16(v)))
 		case '4':
 			v, err := strconv.ParseUint(args[0], 10, 32)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid uint32: %w", err)
+				return enc, nil, fmt.Errorf("invalid uint32: %w", err)
 			}
-			enc = append(enc, packet.Raw(byteOrder.AppendUint32(nil, uint32(v))))
+			packet.Append(&enc, byteOrder.AppendUint32(nil, uint32(v)))
 		case '8':
 			v, err := strconv.ParseUint(args[0], 10, 64)
 			if err != nil {
-				return nil, nil, fmt.Errorf("invalid uint64: %w", err)
+				return enc, nil, fmt.Errorf("invalid uint64: %w", err)
 			}
-			enc = append(enc, packet.Raw(byteOrder.AppendUint64(nil, v)))
+			packet.Append(&enc, byteOrder.AppendUint64(nil, v))
 		default:
 			panic("invalid code: " + string(c))
 		}

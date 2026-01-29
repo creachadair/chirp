@@ -491,7 +491,7 @@ func TestProtocolFatal(t *testing.T) {
 			time.AfterFunc(time.Second, func() { p.Stop() })
 
 			tw.Write([]byte{'\xc7', 0, 0, 2, 0, 0, 0, 1, 'X'})
-			mustErr(t, p.Wait(), "short request payload")
+			mustErr(t, p.Wait(), "value truncated")
 		})
 	})
 
