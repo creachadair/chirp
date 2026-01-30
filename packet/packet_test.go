@@ -78,8 +78,8 @@ func TestBuilder(t *testing.T) {
 	b.Uint16(5000)
 	b.Uint32(0xfc009a01)
 	b.Vint30(999)
-	b.VString("apple")
-	b.VBytes([]byte("pear"))
+	packet.VAppend(&b, "apple")
+	packet.VAppend(&b, []byte("pear"))
 	packet.Append(&b, "xyzzy")
 
 	const want = "\x01\x05\x09\x64\x13\x88\xfc\x00\x9a\x01\x9d\x0f\x14apple\x10pearxyzzy"

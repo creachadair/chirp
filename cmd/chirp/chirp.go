@@ -175,7 +175,7 @@ func formatData(pat string, args []string) (packet.Builder, []string, error) {
 		case 'r':
 			packet.Append(&enc, args[0])
 		case 's':
-			enc.VString(args[0])
+			packet.VAppend(&enc, args[0])
 		case '%':
 			v, err := strconv.ParseBool(args[0])
 			if err != nil {

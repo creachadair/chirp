@@ -32,12 +32,6 @@ func (b *Builder) Uint32(v uint32) { b.buf = binary.BigEndian.AppendUint32(b.buf
 // Vint30 appends a [Vint30] value to b.
 func (b *Builder) Vint30(v uint32) { b.buf = Vint30(v).Append(b.buf) }
 
-// VString appends a length-prefixed string to b. The length is encoded as a [Vint30].
-func (b *Builder) VString(s string) { vstring(b, s) }
-
-// VBytes appends a length-prefixed string to b. The length is encoded as a [Vint30].
-func (b *Builder) VBytes(data []byte) { vstring(b, data) }
-
 // Len reports the number of bytes currently in the buffer.
 func (b *Builder) Len() int { return len(b.buf) }
 
@@ -63,7 +57,8 @@ func (b *Builder) Grow(n int) {
 // Append appends the contents of v to b with no framing.
 func Append[Str ~string | ~[]byte](b *Builder, v Str) { b.buf = append(b.buf, v...) }
 
-func vstring[Str ~string | ~[]byte](b *Builder, s Str) {
+// VAppend appends a length-prefixed string to b.  The length is encoded as [Vint30].
+func VAppend[Str ~string | ~[]byte](b *Builder, s Str) {
 	b.buf = Vint30(len(s)).Append(b.buf)
 	b.buf = append(b.buf, s...)
 }
