@@ -164,8 +164,8 @@ func (s *Scanner) Rest() []byte { return s.rest }
 
 // VGet parses a single length-prefixed string from the head of s.
 // The length must be encoded as a [Vint30].
-// When the result is a slice, the value is only valid until a subsequent
-// call to a method of s, and the caller must not modify its contents.
+// When the result is a slice, the value aliases the input, and the caller must
+// not modify its contents.
 func VGet[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
 	nb, err := s.Vint30()
 	if err != nil {
@@ -182,9 +182,8 @@ func VGet[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
 
 // Get returns a string of exactly n bytes from the head of the input.
 // If the full requested amount is not available, a partial result is returned
-// along with an error. When the result is a slice, the value is only valid
-// until a subsequent call of a method of s, and the caller must not modify its
-// contents.
+// along with an error.  When the result is a slice, the value aliases the
+// input, and the caller must not modify its contents.
 func Get[Str ~string | ~[]byte](s *Scanner, n int) (Str, error) {
 	if len(s.rest) < n {
 		return Str(s.rest), fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), n, io.ErrUnexpectedEOF)
