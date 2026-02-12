@@ -136,8 +136,8 @@ func (r Request) Encode() []byte {
 	b.Grow(4 + 1 + mlen + len(r.Data)) // 4 request ID, 1 method name length
 	b.Uint32(r.RequestID)
 	b.Put(byte(mlen))
-	packet.Append(&b, r.Method)
-	packet.Append(&b, r.Data)
+	b.PutString(r.Method)
+	b.Put(r.Data...)
 	return b.Bytes()
 }
 
@@ -152,7 +152,7 @@ func (r *Request) Decode(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("offset %d: %w", s.Offset(), err)
 	}
-	name, err := packet.Get[string](s, int(mlen))
+	name, err := s.GetString(int(mlen))
 	if err != nil {
 		return fmt.Errorf("offset %d: %w", s.Offset(), err)
 	}
@@ -183,7 +183,7 @@ func (r Response) Encode() []byte {
 	b.Grow(4 + 1 + len(r.Data)) // 4 request ID, 1 code
 	b.Uint32(r.RequestID)
 	b.Put(byte(r.Code))
-	packet.Append(&b, r.Data)
+	b.Put(r.Data...)
 	return b.Bytes()
 }
 
@@ -311,8 +311,8 @@ func (e ErrorData) Encode() []byte {
 	b.Grow(4 + mlen + len(e.Data)) // 2 for code, 2 for message length
 	b.Uint16(e.Code)
 	b.Uint16(uint16(mlen))
-	packet.Append(&b, msg)
-	packet.Append(&b, e.Data)
+	b.PutString(msg)
+	b.Put(e.Data...)
 	return b.Bytes()
 }
 
@@ -339,7 +339,7 @@ func (e *ErrorData) Decode(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("offset %d: message length: %w", s.Offset(), err)
 	}
-	msg, err := packet.Get[string](s, int(mlen))
+	msg, err := s.GetString(int(mlen))
 	if err != nil {
 		return fmt.Errorf("offset %d: error message: %w", s.Offset(), err)
 	}

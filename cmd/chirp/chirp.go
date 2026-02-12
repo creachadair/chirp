@@ -101,11 +101,11 @@ func formatData(pat string, args []string) (packet.Builder, []string, error) {
 		case '?':
 			enc.Vint30(uint32(n))
 		case '@':
-			packet.Append(&enc, byteOrder.AppendUint16(nil, uint16(n)))
+			enc.Put(byteOrder.AppendUint16(nil, uint16(n))...)
 		case '$':
-			packet.Append(&enc, byteOrder.AppendUint32(nil, uint32(n)))
+			enc.Put(byteOrder.AppendUint32(nil, uint32(n))...)
 		case '*':
-			packet.Append(&enc, byteOrder.AppendUint64(nil, uint64(n)))
+			enc.Put(byteOrder.AppendUint64(nil, uint64(n))...)
 		case '!':
 			enc.Put(byte(n))
 		default:
@@ -142,7 +142,7 @@ func formatData(pat string, args []string) (packet.Builder, []string, error) {
 				return enc, nil, fmt.Errorf("invalid subpattern: %w", err)
 			}
 			packSize(sd.Len())
-			packet.Append(&enc, sd.Bytes())
+			enc.Put(sd.Bytes()...)
 			args = sa
 			i += len(sub) + 1
 			continue
@@ -159,23 +159,23 @@ func formatData(pat string, args []string) (packet.Builder, []string, error) {
 			if err != nil {
 				return enc, nil, fmt.Errorf("invalid base64: %w", err)
 			}
-			packet.Append(&enc, dec)
+			enc.Put(dec...)
 		case 'p':
 			if len(args[0]) > 255 {
 				return enc, nil, fmt.Errorf("length %d > 255 too long for p", len(args[0]))
 			}
 			enc.Put(byte(len(args[0])))
-			packet.Append(&enc, args[0])
+			enc.PutString(args[0])
 		case 'q':
 			dec, err := strconv.Unquote(`"` + args[0] + `"`)
 			if err != nil {
 				return enc, nil, fmt.Errorf("invalid string: %w", err)
 			}
-			packet.Append(&enc, dec)
+			enc.PutString(dec)
 		case 'r':
-			packet.Append(&enc, args[0])
+			enc.PutString(args[0])
 		case 's':
-			packet.VAppend(&enc, args[0])
+			enc.VPutString(args[0])
 		case '%':
 			v, err := strconv.ParseBool(args[0])
 			if err != nil {
@@ -199,19 +199,19 @@ func formatData(pat string, args []string) (packet.Builder, []string, error) {
 			if err != nil {
 				return enc, nil, fmt.Errorf("invalid uint16: %w", err)
 			}
-			packet.Append(&enc, byteOrder.AppendUint16(nil, uint16(v)))
+			enc.Put(byteOrder.AppendUint16(nil, uint16(v))...)
 		case '4':
 			v, err := strconv.ParseUint(args[0], 10, 32)
 			if err != nil {
 				return enc, nil, fmt.Errorf("invalid uint32: %w", err)
 			}
-			packet.Append(&enc, byteOrder.AppendUint32(nil, uint32(v)))
+			enc.Put(byteOrder.AppendUint32(nil, uint32(v))...)
 		case '8':
 			v, err := strconv.ParseUint(args[0], 10, 64)
 			if err != nil {
 				return enc, nil, fmt.Errorf("invalid uint64: %w", err)
 			}
-			packet.Append(&enc, byteOrder.AppendUint64(nil, v))
+			enc.Put(byteOrder.AppendUint64(nil, v)...)
 		default:
 			panic("invalid code: " + string(c))
 		}
