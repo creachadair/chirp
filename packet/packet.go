@@ -167,9 +167,15 @@ func (s *Scanner) Rest() []byte { return s.rest }
 
 // VGet parses a single length-prefixed string from the head of s.
 // The length must be encoded as a [Vint30].
-// When the result is a slice, the value aliases the input, and the caller must
-// not modify its contents.
-func VGet[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
+// The result value aliases the input, and the caller must not modify its
+// contents.
+func (s *Scanner) VGet() ([]byte, error) { return vget[[]byte](s) }
+
+// VGetString parses a single length-prefixed string from the head of s.
+// The length must be encoded as a [Vint30].
+func (s *Scanner) VGetString() (string, error) { return vget[string](s) }
+
+func vget[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
 	nb, err := s.Vint30()
 	if err != nil {
 		return out, err
@@ -185,9 +191,16 @@ func VGet[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
 
 // Get returns a string of exactly n bytes from the head of the input.
 // If the full requested amount is not available, a partial result is returned
-// along with an error.  When the result is a slice, the value aliases the
-// input, and the caller must not modify its contents.
-func Get[Str ~string | ~[]byte](s *Scanner, n int) (Str, error) {
+// along with an error.  The result value aliases the input, and the caller
+// must not modify its contents.
+func (s *Scanner) Get(n int) ([]byte, error) { return nget[[]byte](s, n) }
+
+// Get returns a string of exactly n bytes from the head of the input.
+// If the full requested amount is not available, a partial result is returned
+// along with an error.
+func (s *Scanner) GetString(n int) (string, error) { return nget[string](s, n) }
+
+func nget[Str ~string | ~[]byte](s *Scanner, n int) (Str, error) {
 	if len(s.rest) < n {
 		return Str(s.rest), fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), n, io.ErrUnexpectedEOF)
 	}
