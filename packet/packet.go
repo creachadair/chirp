@@ -23,6 +23,23 @@ func (b *Builder) Bool(ok bool) { b.Put(value.Cond[byte](ok, 1, 0)) }
 // Put appends the specified bytes to v in order.
 func (b *Builder) Put(vs ...byte) { b.buf = append(b.buf, vs...) }
 
+// PutString appends the specified string to v.
+func (b *Builder) PutString(s string) { b.buf = append(b.buf, s...) }
+
+// VPut appends a length-prefixed string to b. The length is encoded as a [Vint30].
+func (b *Builder) VPut(vs []byte) {
+	b.Grow(VLen(len(vs)))
+	b.Vint30(uint32(len(vs)))
+	b.buf = append(b.buf, vs...)
+}
+
+// VPutString appends a length-prefixed string to b. The length is encoded as a [Vint30].
+func (b *Builder) VPutString(s string) {
+	b.Grow(VLen(len(s)))
+	b.Vint30(uint32(len(s)))
+	b.buf = append(b.buf, s...)
+}
+
 // Uint16 appends v to b in big-endian order.
 func (b *Builder) Uint16(v uint16) { b.buf = binary.BigEndian.AppendUint16(b.buf, v) }
 
@@ -52,15 +69,6 @@ func (b *Builder) Grow(n int) {
 		copy(r, b.buf)
 		b.buf = r
 	}
-}
-
-// Append appends the contents of v to b with no framing.
-func Append[Str ~string | ~[]byte](b *Builder, v Str) { b.buf = append(b.buf, v...) }
-
-// VAppend appends a length-prefixed string to b.  The length is encoded as [Vint30].
-func VAppend[Str ~string | ~[]byte](b *Builder, s Str) {
-	b.buf = Vint30(len(s)).Append(b.buf)
-	b.buf = append(b.buf, s...)
 }
 
 // A Scanner reads encoded values from the contents of a packet.
@@ -102,9 +110,9 @@ func (s *Scanner) Byte() (byte, error) {
 	return out, nil
 }
 
-// VLen reports the encoded size in bytes of a length-prefixed encoding of s,
-// where the length is encoded as a [Vint30].
-func VLen[Str ~string | ~[]byte](s Str) int { return Vint30(len(s)).Size() + len(s) }
+// VLen reports the encoded size in bytes of a length-prefixed encoding of an
+// n-byte string, where the length is encoded as a [Vint30].
+func VLen(n int) int { return Vint30(n).Size() + n }
 
 // Vint30 parses a single [Vint30] value from the head of the input.
 func (s *Scanner) Vint30() (int, error) {
