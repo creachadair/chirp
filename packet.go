@@ -62,7 +62,7 @@ func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 }
 
 // String returns a human-friendly rendering of the packet.
-func (p *Packet) String() string {
+func (p Packet) String() string {
 	var pay string
 	switch p.Type {
 	case PacketRequest:
