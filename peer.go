@@ -26,10 +26,10 @@ import (
 // sender and one receiver.
 type Channel interface {
 	// Send the packet in binary format to the receiver.
-	Send(*Packet) error
+	Send(Packet) error
 
 	// Receive the next available packet from the channel.
-	Recv() (*Packet, error)
+	Recv() (Packet, error)
 
 	// Close the channel, causing any pending send or receive operations to
 	// terminate and report an error. After a channel is closed, all further
@@ -49,12 +49,12 @@ type Handler func(context.Context, *Request) ([]byte, error)
 // A PacketHandler processes a packet from the remote peer. A packet handler
 // can obtain the peer from its context argument using the [ContextPeer]
 // helper.  Any error reported by a packet handler is protocol fatal.
-type PacketHandler func(context.Context, *Packet) error
+type PacketHandler func(context.Context, Packet) error
 
 // A PacketLogger logs a packet exchanged with the remote peer.  The value of
 // dir is either [Send] for a packet sent by the local peer, or [Recv] for a
 // packet received from the remote peer.
-type PacketLogger func(pkt *Packet, dir PacketDir)
+type PacketLogger func(pkt Packet, dir PacketDir)
 
 // PacketDir indicates the "direction" of a packet, either [Send] or [Recv].
 type PacketDir string
@@ -79,7 +79,7 @@ const (
 // invoke a call on the remote peer. Both of these methods are safe for
 // concurrent use by multiple goroutines.
 type Peer struct {
-	in  interface{ Recv() (*Packet, error) }
+	in  interface{ Recv() (Packet, error) }
 	out struct {
 		// Must hold the lock to send to or set ch.
 		sync.Mutex
@@ -229,7 +229,7 @@ func (p *Peer) Wait() error {
 // Any packet type can be sent, including reserved types. The caller is
 // responsible for ensuring such packets have a valid payload.
 func (p *Peer) SendPacket(ptype PacketType, payload []byte) error {
-	return p.sendOut(&Packet{
+	return p.sendOut(Packet{
 		Type:    ptype,
 		Payload: payload,
 	})
@@ -492,7 +492,7 @@ func (p *Peer) sendRsp(rsp *Response) {
 		return
 	}
 
-	if err := p.sendOut(&Packet{
+	if err := p.sendOut(Packet{
 		Type:    PacketResponse,
 		Payload: rsp.Encode(),
 	}); err != nil {
@@ -581,7 +581,7 @@ func (p *Peer) sendReq(method string, data []byte) (uint32, pending, error) {
 	p.μ.Unlock()
 	err := func() error {
 		defer p.μ.Lock()
-		return p.sendOut(&Packet{
+		return p.sendOut(Packet{
 			Type: PacketRequest,
 			Payload: Request{
 				RequestID: id,
@@ -602,7 +602,7 @@ func (p *Peer) sendReq(method string, data []byte) (uint32, pending, error) {
 // sendCancel sends a cancellation for id to the remote peer then returns the
 // error from ctx.
 func (p *Peer) sendCancel(id uint32) {
-	if err := p.sendOut(&Packet{
+	if err := p.sendOut(Packet{
 		Type:    PacketCancel,
 		Payload: Cancel{RequestID: id}.Encode(),
 	}); err != nil {
@@ -623,7 +623,7 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 	// Report duplicate request ID and terminate the existing call.
 	if stop, ok := p.icall[req.RequestID]; ok {
 		stop(errDuplicateRequest)
-		return p.sendOut(&Packet{
+		return p.sendOut(Packet{
 			Type: PacketResponse,
 			Payload: Response{
 				RequestID: req.RequestID,
@@ -639,7 +639,7 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 		if wc, ok := p.imux[wildcardID]; ok {
 			handler = wc
 		} else {
-			return p.sendOut(&Packet{
+			return p.sendOut(Packet{
 				Type: PacketResponse,
 				Payload: Response{
 					RequestID: req.RequestID,
@@ -706,7 +706,7 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 
 // dispatchPacket routes an inbound packet from the remote peer.
 // Any error it reports is protocol fatal.
-func (p *Peer) dispatchPacket(pkt *Packet) error {
+func (p *Peer) dispatchPacket(pkt Packet) error {
 	p.logPacket(pkt, Recv)
 	if pkt.Protocol != 0 {
 		return nil // we understand only v0 packets
@@ -778,7 +778,7 @@ func (p *Peer) dispatchPacket(pkt *Packet) error {
 	return nil
 }
 
-func (p *Peer) logPacket(pkt *Packet, dir PacketDir) {
+func (p *Peer) logPacket(pkt Packet, dir PacketDir) {
 	if p.plog != nil {
 		p.plog(pkt, dir)
 	}
@@ -792,7 +792,7 @@ func (p *Peer) releaseIDLocked(id uint32) {
 	}
 }
 
-func (p *Peer) sendOut(pkt *Packet) error {
+func (p *Peer) sendOut(pkt Packet) error {
 	p.out.Lock()
 	defer p.out.Unlock()
 	if p.out.ch == nil {

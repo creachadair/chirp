@@ -9,6 +9,7 @@ import (
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/taskgroup"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestDirect(t *testing.T) {
@@ -16,7 +17,7 @@ func TestDirect(t *testing.T) {
 
 	g := taskgroup.New(nil)
 	g.Go(func() error {
-		pkt := new(chirp.Packet)
+		var pkt chirp.Packet
 		if err := c.Send(pkt); err != nil {
 			t.Errorf("A Send: %v", err)
 		}
@@ -24,8 +25,8 @@ func TestDirect(t *testing.T) {
 		if err != nil {
 			t.Errorf("A Recv: %v", err)
 		}
-		if got != pkt {
-			t.Errorf("Packet: got %v, want %v", got, pkt)
+		if diff := cmp.Diff(got, pkt); diff != "" {
+			t.Errorf("Returned packet (-got, +want):\n%s", diff)
 		}
 		return nil
 	})
@@ -48,10 +49,10 @@ func TestDirect(t *testing.T) {
 		t.Errorf("s.Close: %v", err)
 	}
 
-	if err := c.Send(nil); err == nil {
+	if err := c.Send(chirp.Packet{}); err == nil {
 		t.Error("c.Send after close did not report an error")
 	}
-	if err := s.Send(nil); err == nil {
+	if err := s.Send(chirp.Packet{}); err == nil {
 		t.Error("s.Send after close did not report an error")
 	}
 	if pkt, err := c.Recv(); err == nil {

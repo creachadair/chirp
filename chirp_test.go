@@ -252,7 +252,7 @@ func TestCancellation(t *testing.T) {
 			wg.Add(3) // there are three packets exchanged below
 
 			var apkt []packet
-			loc.A.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			loc.A.LogPackets(func(pkt chirp.Packet, dir chirp.PacketDir) {
 				if dir == chirp.Recv {
 					apkt = append(apkt, packet{T: pkt.Type, P: string(pkt.Payload)})
 					wg.Done()
@@ -263,7 +263,7 @@ func TestCancellation(t *testing.T) {
 			})
 
 			var bpkt []packet
-			loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			loc.B.LogPackets(func(pkt chirp.Packet, dir chirp.PacketDir) {
 				if dir == chirp.Recv {
 					bpkt = append(bpkt, packet{T: pkt.Type, P: string(pkt.Payload)})
 					wg.Done()
@@ -392,7 +392,7 @@ func TestSlowCancellation(t *testing.T) {
 
 		var wg sync.WaitGroup
 		wg.Add(2)
-		var rspA []*chirp.Packet
+		var rspA []chirp.Packet
 		loc.A.
 			Handle("666", func(context.Context, *chirp.Request) ([]byte, error) {
 				time.Sleep(time.Second)
@@ -401,7 +401,7 @@ func TestSlowCancellation(t *testing.T) {
 			Handle("100", func(context.Context, *chirp.Request) ([]byte, error) {
 				return []byte("ok"), nil
 			}).
-			LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+			LogPackets(func(pkt chirp.Packet, dir chirp.PacketDir) {
 				if dir == chirp.Send && pkt.Type == chirp.PacketResponse {
 					rspA = append(rspA, pkt)
 					wg.Done()
@@ -565,12 +565,12 @@ func TestCustomPacket(t *testing.T) {
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
-	var log []*chirp.Packet
-	var got []*chirp.Packet
+	var log []chirp.Packet
+	var got []chirp.Packet
 	var wg sync.WaitGroup
 	wg.Add(2)
 	loc.A.
-		HandlePacket(128, func(ctx context.Context, pkt *chirp.Packet) error {
+		HandlePacket(128, func(ctx context.Context, pkt chirp.Packet) error {
 			defer wg.Done()
 			got = append(got, pkt)
 
@@ -579,27 +579,27 @@ func TestCustomPacket(t *testing.T) {
 			rsp := string(pkt.Payload) + " reply"
 			return chirp.ContextPeer(ctx).SendPacket(129, []byte(rsp))
 		}).
-		LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+		LogPackets(func(pkt chirp.Packet, dir chirp.PacketDir) {
 			t.Logf("A: [%s] %v", dir, pkt)
 			if dir == chirp.Recv {
 				log = append(log, pkt)
 			}
 		})
 	loc.B.
-		HandlePacket(129, func(ctx context.Context, pkt *chirp.Packet) error {
+		HandlePacket(129, func(ctx context.Context, pkt chirp.Packet) error {
 			defer wg.Done()
 			log = append(log, pkt)
 			return nil
 		})
 
 	// Unknown packet type: Logged but discarded.
-	p1 := &chirp.Packet{Type: 100, Payload: []byte("unrecognized")}
+	p1 := chirp.Packet{Type: 100, Payload: []byte("unrecognized")}
 
 	// Registered custom packet type: Logged and "processed".
-	p2 := &chirp.Packet{Type: 128, Payload: []byte("custom")}
+	p2 := chirp.Packet{Type: 128, Payload: []byte("custom")}
 
 	// A packet handler can also send packets back to its caller.
-	p3 := &chirp.Packet{Type: 129, Payload: []byte("custom reply")}
+	p3 := chirp.Packet{Type: 129, Payload: []byte("custom reply")}
 
 	if err := loc.B.SendPacket(p1.Type, p1.Payload); err != nil {
 		t.Fatalf("SendPacket: %v", err)
@@ -614,10 +614,10 @@ func TestCustomPacket(t *testing.T) {
 		t.Errorf("Stop peer: %v", err)
 	}
 
-	if diff := cmp.Diff([]*chirp.Packet{p1, p2, p3}, log); diff != "" {
+	if diff := cmp.Diff([]chirp.Packet{p1, p2, p3}, log); diff != "" {
 		t.Errorf("Packet log (-want, +got):\n%s", diff)
 	}
-	if diff := cmp.Diff([]*chirp.Packet{p2}, got); diff != "" {
+	if diff := cmp.Diff([]chirp.Packet{p2}, got); diff != "" {
 		t.Errorf("Custom packet (-want, +got):\n%s", diff)
 	}
 }
@@ -625,7 +625,7 @@ func TestCustomPacket(t *testing.T) {
 func TestProtocolVersion(t *testing.T) {
 	defer leaktest.Check(t)()
 
-	want := &chirp.Packet{
+	want := chirp.Packet{
 		Protocol: 99, // specifically, not 0
 		Type:     chirp.PacketRequest,
 		Payload: chirp.Request{
@@ -649,7 +649,7 @@ func TestProtocolVersion(t *testing.T) {
 	}
 
 	ac, bc := channel.Direct()
-	a := chirp.NewPeer().LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+	a := chirp.NewPeer().LogPackets(func(pkt chirp.Packet, dir chirp.PacketDir) {
 		if dir == chirp.Send {
 			// The peer should not send any packets.
 			t.Errorf("Unexpected packet sent: %v", pkt)
@@ -789,8 +789,8 @@ func TestDuplicate(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(2)
 
-		var rspB []*chirp.Packet
-		loc.B.LogPackets(func(pkt *chirp.Packet, dir chirp.PacketDir) {
+		var rspB []chirp.Packet
+		loc.B.LogPackets(func(pkt chirp.Packet, dir chirp.PacketDir) {
 			if dir == chirp.Recv {
 				rspB = append(rspB, pkt)
 				wg.Done()
@@ -814,11 +814,11 @@ func TestDuplicate(t *testing.T) {
 		wg.Wait()
 
 		// Verify that we got two DUPLICATE_REQUEST responses.
-		wantResp := &chirp.Packet{
+		wantResp := chirp.Packet{
 			Type:    chirp.PacketResponse,
 			Payload: chirp.Response{RequestID: 12345, Code: chirp.CodeDuplicateID}.Encode(),
 		}
-		if diff := cmp.Diff(rspB, []*chirp.Packet{wantResp, wantResp}); diff != "" {
+		if diff := cmp.Diff(rspB, []chirp.Packet{wantResp, wantResp}); diff != "" {
 			t.Errorf("Wrong responses (-got, +want):\n%s", diff)
 		}
 	})
@@ -939,7 +939,7 @@ func parseTestSpec(ctx context.Context, s string) ([]byte, error) {
 }
 
 func logPacket(t *testing.T, tag string) chirp.PacketLogger {
-	return func(pkt *chirp.Packet, dir chirp.PacketDir) {
+	return func(pkt chirp.Packet, dir chirp.PacketDir) {
 		t.Helper()
 		t.Logf("%s: [%s] %v", tag, dir, pkt)
 	}
@@ -1068,7 +1068,7 @@ func TestClone(t *testing.T) {
 	loc.A.Handle("test", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
 		return []byte(ctx.Value(echoKey{}).(string)), nil
 	})
-	loc.A.HandlePacket(ptype, func(context.Context, *chirp.Packet) error { defer pg.Done(); acount++; return nil })
+	loc.A.HandlePacket(ptype, func(context.Context, chirp.Packet) error { defer pg.Done(); acount++; return nil })
 
 	var logCalls atomic.Int32
 	checkLogs := func(want int) {
@@ -1076,7 +1076,7 @@ func TestClone(t *testing.T) {
 			t.Errorf("Log calls: got %d, want %d", got, want)
 		}
 	}
-	loc.A.LogPackets(func(*chirp.Packet, chirp.PacketDir) { logCalls.Add(1) })
+	loc.A.LogPackets(func(chirp.Packet, chirp.PacketDir) { logCalls.Add(1) })
 
 	cp := loc.A.Clone()
 	cp.Handle("mirror", func(context.Context, *chirp.Request) ([]byte, error) { return []byte("y"), nil })
@@ -1112,7 +1112,7 @@ func TestClone(t *testing.T) {
 	}
 
 	// Now if we modify the packet handler, they should diverge.
-	cp.HandlePacket(ptype, func(context.Context, *chirp.Packet) error { defer pg.Done(); ccount++; return nil })
+	cp.HandlePacket(ptype, func(context.Context, chirp.Packet) error { defer pg.Done(); ccount++; return nil })
 	checkSend(loc.B) // goes to original handler
 	checkSend(cc)    // goes to updated handler
 	pg.Wait()
