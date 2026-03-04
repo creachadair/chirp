@@ -37,7 +37,8 @@ func TestAccepter(t *testing.T) {
 			acc := peers.NetAccepter(lst)
 
 			time.AfterFunc(1*time.Second, func() {
-				conn, err := lst.DialContext(t.Context())
+				addr := lst.Addr()
+				conn, err := n.DialContext(t.Context(), addr.Network(), addr.String())
 				if err != nil {
 					t.Errorf("Dial failed: %v", err)
 				}
@@ -101,7 +102,8 @@ func TestLoop(t *testing.T) {
 		})
 		for range numClients {
 			g.Go(func() error {
-				conn, err := lst.Dial()
+				addr := lst.Addr()
+				conn, err := n.Dial(addr.Network(), addr.String())
 				if err != nil {
 					return err
 				}
