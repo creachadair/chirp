@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/creachadair/taskgroup v0.14.2
-	github.com/fortytw2/leaktest v1.3.0
 	github.com/google/go-cmp v0.7.0
 )
 

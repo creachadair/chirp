@@ -47,7 +47,7 @@ func BenchmarkCall(b *testing.B) {
 
 func runBench(b *testing.B, peer *chirp.Peer, data []byte) {
 	b.Helper()
-	ctx := context.Background()
+	ctx := b.Context()
 
 	for b.Loop() {
 		_, err := peer.Call(ctx, "X", nil)
