@@ -829,9 +829,13 @@ func (p pending) deliverLocked(r *Response) {
 func callError(err error) *CallError { return &CallError{Err: err} }
 
 // CallError is the concrete type of errors reported by the [Peer.Call] method.
-// For service errors, the Err field is nil and the [ErrorData] contains the
-// error details. For errors arising from a response, the Response field
-// contains the complete response message.
+//
+// For errors originating locally, including channel failures and context
+// deadline orcancellation errors, the Err field contains the error value.
+//
+// For errors reported by the remote peer ("service" errors) the [ErrorData]
+// contains the error details. For errors arising from a response, the Response
+// field contains the complete response message.
 type CallError struct {
 	ErrorData
 	Err      error     // nil for service errors
