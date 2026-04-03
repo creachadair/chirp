@@ -831,7 +831,7 @@ func callError(err error) *CallError { return &CallError{Err: err} }
 // CallError is the concrete type of errors reported by the [Peer.Call] method.
 //
 // For errors originating locally, including channel failures and context
-// deadline orcancellation errors, the Err field contains the error value.
+// deadline or cancellation errors, the Err field contains the error value.
 //
 // For errors reported by the remote peer ("service" errors) the [ErrorData]
 // contains the error details. For errors arising from a response, the Response
