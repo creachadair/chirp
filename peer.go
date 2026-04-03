@@ -858,7 +858,7 @@ func (c *CallError) Error() string {
 type peerContextKey struct{}
 
 // ContextPeer returns the [Peer] associated with the given context, or nil if
-// none is defined.  The context passed to a method Handler has this value.
+// none is defined.  The context passed to a method [Handler] has this value.
 func ContextPeer(ctx context.Context) *Peer {
 	if v := ctx.Value(peerContextKey{}); v != nil {
 		return v.(*Peer)
