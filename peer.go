@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/creachadair/mds/mctx"
 	"github.com/creachadair/taskgroup"
 )
 
@@ -353,9 +354,9 @@ var errPeerCancel = errors.New("peer canceled request")
 // call will dispatch to p itself, as if calling [Peer.Exec].
 func (p *Peer) Exec(ctx context.Context, method string, data []byte) ([]byte, error) {
 	if ContextPeer(ctx) == nil {
-		ctx = context.WithValue(ctx, peerContextKey{}, p)
+		ctx = peerContextKey.Attach(ctx, p)
 	}
-	rsp, err := p.Call(context.WithValue(ctx, execContextKey{}, true), method, data)
+	rsp, err := p.Call(execContextKey{}.Attach(ctx, true), method, data)
 	if err != nil {
 		return nil, err
 	}
@@ -651,7 +652,7 @@ func (p *Peer) dispatchRequestLocked(req *Request) (err error) {
 
 	// Start a goroutine to service the request. The goroutine handles
 	// cancellation and response delivery.
-	pctx := context.WithValue(p.base(), peerContextKey{}, p)
+	pctx := peerContextKey.Attach(p.base(), p)
 	ctx, cancelCause := context.WithCancelCause(pctx)
 	p.icall[req.RequestID] = cancelCause
 	p.metrics().callActive.Add(1)
@@ -764,7 +765,7 @@ func (p *Peer) dispatchPacket(pkt Packet) error {
 			break // ignore the packet
 		}
 
-		pctx := context.WithValue(p.base(), peerContextKey{}, p)
+		pctx := peerContextKey.Attach(p.base(), p)
 		return func() (err error) {
 			// Ensure a panic out of a packet handler is turned into a protocol fatal.
 			defer func() {
@@ -855,25 +856,15 @@ func (c *CallError) Error() string {
 	return fmt.Sprintf("request %d: %s", c.Response.RequestID, c.Response.Code.String())
 }
 
-type peerContextKey struct{}
+var peerContextKey mctx.Key[*Peer]
 
 // ContextPeer returns the [Peer] associated with the given context, or nil if
 // none is defined.  The context passed to a method [Handler] has this value.
-func ContextPeer(ctx context.Context) *Peer {
-	if v := ctx.Value(peerContextKey{}); v != nil {
-		return v.(*Peer)
-	}
-	return nil
-}
+func ContextPeer(ctx context.Context) *Peer { return peerContextKey.Lookup(ctx).Get() }
 
-type execContextKey struct{}
+type execContextKey struct{ mctx.Key[bool] }
 
-func isLocalExec(ctx context.Context) bool {
-	if isLocal, ok := ctx.Value(execContextKey{}).(bool); ok {
-		return isLocal
-	}
-	return false
-}
+func isLocalExec(ctx context.Context) bool { return execContextKey{}.Lookup(ctx).Get() }
 
 // SplitAddress parses an address string to guess a network type and target.
 //

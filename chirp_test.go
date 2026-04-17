@@ -21,6 +21,7 @@ import (
 	"github.com/creachadair/chirp"
 	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/chirp/peers"
+	"github.com/creachadair/mds/mctx"
 	"github.com/creachadair/mds/mnet"
 	"github.com/creachadair/mds/mstr"
 	"github.com/creachadair/mds/mtest"
@@ -706,15 +707,15 @@ func TestContextPlumbing(t *testing.T) {
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
-		type testKey struct{}
+		var testKey mctx.Key[string] = "test"
 		loc.A.
 			NewContext(func() context.Context {
 				// Attach a known value to the base context.
-				return context.WithValue(t.Context(), testKey{}, "ok")
+				return testKey.Attach(t.Context(), "ok")
 			}).
 			Handle("100", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
 				// Verify that the base context is visible from ctx.
-				v, ok := ctx.Value(testKey{}).(string)
+				v, ok := testKey.Lookup(ctx).GetOK()
 				if !ok || v != "ok" {
 					t.Error("Base context was not correctly plumbed")
 				}
@@ -1070,8 +1071,8 @@ func TestClone(t *testing.T) {
 	loc := peers.NewLocal()
 	defer loc.Stop()
 
-	type echoKey struct{}
-	vctx := context.WithValue(t.Context(), echoKey{}, "x")
+	var echoKey mctx.Key[string]
+	vctx := echoKey.Attach(t.Context(), "x")
 	checkCall := func(p *chirp.Peer, method, want string) {
 		t.Helper()
 		if rsp, err := p.Call(t.Context(), method, nil); err != nil {
@@ -1095,7 +1096,7 @@ func TestClone(t *testing.T) {
 
 	loc.A.NewContext(func() context.Context { return vctx })
 	loc.A.Handle("test", func(ctx context.Context, _ *chirp.Request) ([]byte, error) {
-		return []byte(ctx.Value(echoKey{}).(string)), nil
+		return []byte(echoKey.Lookup(ctx).Get()), nil
 	})
 	loc.A.HandlePacket(ptype, func(context.Context, chirp.Packet) error { defer pg.Done(); acount++; return nil })
 
