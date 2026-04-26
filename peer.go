@@ -126,17 +126,17 @@ func (p *Peer) Start(ch Channel) *Peer {
 		p.base = context.Background
 	}
 
-	g.Go(func() error {
+	g.Run(func() {
 		for {
 			pkt, err := p.in.Recv()
 			if err != nil {
 				p.fail(err)
-				return nil
+				return
 			}
 			p.metrics().packetRecv.Add(1)
 			if err := p.dispatchPacket(pkt); err != nil {
 				p.fail(err)
-				return nil
+				return
 			}
 		}
 	})
