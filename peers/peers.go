@@ -92,3 +92,24 @@ func (n netAccepter) Accept(ctx context.Context) (chirp.Channel, error) {
 	}
 	return channel.IO(conn, conn), nil
 }
+
+// AcceptChan is an implementation of the [Accepter] interface that delivers
+// Chirp channels sent to a Go channel.
+type AcceptChan chan chirp.Channel
+
+// Accept blocks until ctx ends or a [chirp.Channel] is received.
+// If c is closed, it reports [net.ErrClosed].
+// If ctx ends, it reports the context error.
+// Otherwise it reports the channel it received without error.
+// It implements the [Accepter] interface.
+func (c AcceptChan) Accept(ctx context.Context) (chirp.Channel, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case ch, ok := <-c:
+		if ok {
+			return ch, nil
+		}
+		return nil, net.ErrClosed // simulate a close
+	}
+}

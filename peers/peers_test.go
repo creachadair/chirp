@@ -4,6 +4,8 @@ package peers_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	mrand "math/rand/v2"
 	"testing"
 	"testing/synctest"
@@ -73,6 +75,59 @@ func TestAccepter(t *testing.T) {
 			ch, err := acc.Accept(ctx)
 			if err == nil {
 				t.Errorf("Accept: got %v, want error", ch)
+			}
+		})
+	})
+}
+
+func TestAcceptChan(t *testing.T) {
+	base := chirp.NewPeer().Handle("ping", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+		return fmt.Appendf(nil, "pong %d", req.RequestID), nil
+	})
+
+	runTest := func(t *testing.T) (*taskgroup.Single[error], peers.AcceptChan, context.CancelFunc) {
+		t.Helper()
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
+		acc := make(peers.AcceptChan)
+		loop := taskgroup.Go(func() error { return peers.Loop(ctx, acc, base.Clone) })
+
+		c, s := channel.Direct()
+		acc <- s
+		cli := chirp.NewPeer().Start(c)
+		if rsp, err := cli.Call(t.Context(), "ping", nil); err != nil {
+			t.Errorf("Call failed: %v", err)
+		} else if got := string(rsp.Data); got != "pong 1" {
+			t.Errorf("Call response: got %q, want pong 1", got)
+		}
+		if err := cli.Stop(); err != nil {
+			t.Errorf("Client close: %v", err)
+		}
+		return loop, acc, cancel
+	}
+
+	t.Run("Cancel", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			loop, _, cancel := runTest(t)
+
+			// Stop the loop by cancelling its governing context.
+			cancel()
+			if err := loop.Wait(); !errors.Is(err, context.Canceled) {
+				t.Errorf("Loop wait: got %v, want %v", err, context.Canceled)
+			}
+		})
+	})
+
+	t.Run("Close", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			loop, acc, _ := runTest(t)
+
+			// Stop the loop by closing the accepter.  Note we expect a nil error
+			// here, because "closed" is handled explicitly as an OK by the loop.
+			close(acc)
+			if err := loop.Wait(); err != nil {
+				t.Errorf("Loop wait: %v", err)
 			}
 		})
 	})
