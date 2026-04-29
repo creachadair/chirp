@@ -1180,6 +1180,31 @@ func TestHandlerPanic(t *testing.T) {
 	})
 }
 
+func TestPacketHandlerPanic(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		loc := peers.NewLocal()
+		defer loc.Stop()
+
+		const customType = chirp.PacketType(129)
+		const failure = "the handler did the bad"
+		loc.A.HandlePacket(customType, func(ctx context.Context, pkt chirp.Packet) error {
+			panic(failure)
+		})
+
+		if err := loc.B.SendPacket(customType, []byte("whatever")); err != nil {
+			t.Fatalf("SendPacket: unexpected error: %v", err)
+		}
+
+		// A panic in a handler is protocol fatal, so we expect the peer to now
+		// terminate and report an error.
+		if err := loc.A.Wait(); err == nil || !strings.Contains(err.Error(), failure) {
+			t.Errorf("Peer exit: got %v, want %q", err, failure)
+		} else {
+			t.Logf("Got expected error: %v", err)
+		}
+	})
+}
+
 func TestPeerMetrics(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		loc := peers.NewLocal()
