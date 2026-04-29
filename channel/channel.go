@@ -17,14 +17,15 @@ import (
 func Direct() (A, B chirp.Channel) {
 	a2b := make(chan chirp.Packet)
 	b2a := make(chan chirp.Packet)
-	A = direct{a2b: a2b, b2a: b2a}
-	B = direct{a2b: b2a, b2a: a2b}
+	A = direct{a2b: a2b, b2a: b2a, stop: func() { defer close(b2a) }}
+	B = direct{a2b: b2a, b2a: a2b, stop: func() { defer close(a2b) }}
 	return
 }
 
 type direct struct {
-	a2b chan<- chirp.Packet
-	b2a <-chan chirp.Packet
+	a2b  chan<- chirp.Packet
+	b2a  <-chan chirp.Packet
+	stop func()
 }
 
 // Send implements a method of the [chirp.Channel] interface.
@@ -44,15 +45,17 @@ func (d direct) Recv() (chirp.Packet, error) {
 }
 
 // Close implements a method of the [chirp.Channel] interface.
-func (d direct) Close() (err error) {
-	defer safeClose(&err)
+// This implementation never reports an error.
+func (d direct) Close() error {
+	defer safeClose(nil)
 	close(d.a2b)
+	d.stop() // inform the other side
 	return nil
 }
 
-func safeClose(err *error) {
-	if x := recover(); x != nil && *err == nil {
-		*err = net.ErrClosed
+func safeClose(errp *error) {
+	if x := recover(); x != nil && errp != nil && *errp == nil {
+		*errp = net.ErrClosed
 	}
 }
 

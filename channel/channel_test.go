@@ -3,6 +3,7 @@
 package channel_test
 
 import (
+	"errors"
 	"net"
 	"testing"
 
@@ -42,28 +43,31 @@ func TestDirect(t *testing.T) {
 	})
 	g.Wait()
 
+	// Close the client side, which should succeed.
 	if err := c.Close(); err != nil {
 		t.Errorf("c.Close: %v", err)
 	}
-	if err := s.Close(); err != nil {
-		t.Errorf("s.Close: %v", err)
+
+	// A Send from either side should now fail.
+	if err := c.Send(chirp.Packet{}); !errors.Is(err, net.ErrClosed) {
+		t.Errorf("c.Send after c.Close: got %v, want %v", err, net.ErrClosed)
+	}
+	if err := s.Send(chirp.Packet{}); !errors.Is(err, net.ErrClosed) {
+		t.Errorf("s.Send after c.Close: got %v, want %v", err, net.ErrClosed)
 	}
 
-	if err := c.Send(chirp.Packet{}); err == nil {
-		t.Error("c.Send after close did not report an error")
+	// A Recv from either side should also fail.
+	if pkt, err := c.Recv(); !errors.Is(err, net.ErrClosed) {
+		t.Errorf("c.Recv after close: got %+v, %v; want %v", pkt, err, net.ErrClosed)
 	}
-	if err := s.Send(chirp.Packet{}); err == nil {
-		t.Error("s.Send after close did not report an error")
+
+	if pkt, err := s.Recv(); !errors.Is(err, net.ErrClosed) {
+		t.Errorf("s.Recv after close: got %+v, %v; want %v", pkt, err, net.ErrClosed)
 	}
-	if pkt, err := c.Recv(); err == nil {
-		t.Errorf("c.Recv after close: got %+v", pkt)
-	} else {
-		t.Logf("Error OK: %v", err)
-	}
-	if pkt, err := s.Recv(); err == nil {
-		t.Errorf("s.Recv after close: got %+v", pkt)
-	} else {
-		t.Logf("Error OK: %v", err)
+
+	// Close the server side, which should succeed.
+	if err := s.Close(); err != nil {
+		t.Errorf("s.Close: %v", err)
 	}
 }
 
