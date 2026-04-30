@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -573,7 +574,7 @@ func TestProtocolFatal(t *testing.T) {
 			synctest.Wait()
 
 			// Simulate the channel failing by closing the pipe.
-			tw.Close() // time.AfterFunc(100*time.Millisecond, func() { tw.Close() })
+			tw.Close()
 
 			// Outbound calls MUST fail and report an error.
 			var buf [64]byte
@@ -1201,6 +1202,11 @@ func TestPacketHandlerPanic(t *testing.T) {
 			t.Errorf("Peer exit: got %v, want %q", err, failure)
 		} else {
 			t.Logf("Got expected error: %v", err)
+		}
+
+		// We should not be able to send to the broken peer anymore.
+		if err := loc.B.SendPacket(99, nil); !errors.Is(err, net.ErrClosed) {
+			t.Errorf("Send after peer stopped: got %v, want %v", err, net.ErrClosed)
 		}
 	})
 }
