@@ -708,7 +708,7 @@ func TestContextPlumbing(t *testing.T) {
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
-		var testKey = mctx.New[string]("test")
+		var testKey = mctx.NewKey[string]("test")
 		loc.A.
 			NewContext(func() context.Context {
 				// Attach a known value to the base context.
