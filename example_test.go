@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/creachadair/chirp"
@@ -12,6 +14,8 @@ import (
 )
 
 func Example() {
+	socketPath := filepath.Join(os.TempDir(), "example.sock")
+
 	// Server: This peer exports a "strlen" method that returns the length of
 	// its argument as a decimal-coded integer.
 	//
@@ -23,21 +27,21 @@ func Example() {
 		})
 
 	// Set up a Unix-domain socket to receive peer connections.
-	lst, err := net.Listen("unix", "example.sock")
+	lst, err := net.Listen("unix", socketPath)
 	if err != nil {
-		log.Fatal("Listen", err)
+		log.Fatalf("Listen: %v", err)
 	}
 	go func() {
 		conn, err := lst.Accept()
 		if err != nil {
-			log.Fatal("Accept", err)
+			log.Fatalf("Accept: %v", err)
 		}
 		lst.Close()
 		p.Start(channel.IO(conn, conn))
 	}()
 
 	// Connect to the server socket and set up a peer.
-	conn, err := net.Dial("unix", "example.sock")
+	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		log.Fatal("Dial", err)
 	}
