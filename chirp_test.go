@@ -201,6 +201,11 @@ func TestWildcard(t *testing.T) {
 				t.Errorf("Call %q: got %q, want %q", mid, got, want)
 			}
 		}
+		returnString := func(s string) chirp.Handler {
+			return func(ctx context.Context, req *chirp.Request) ([]byte, error) {
+				return []byte(s), nil
+			}
+		}
 
 		loc.A.
 			Handle("", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
@@ -209,14 +214,19 @@ func TestWildcard(t *testing.T) {
 				}
 				return []byte("wildcard"), nil
 			}).
-			Handle("1", func(ctx context.Context, req *chirp.Request) ([]byte, error) {
-				return []byte("designated"), nil
-			})
+			Handle("1", returnString("designated"))
 
 		call("", "wildcard", false)
 		call("1", "designated", false)
 		call("2", "wildcard", false)
 		call("hidden", "?", true)
+
+		// Register a specific handler for "2", check that we hit it instead of the wildcard.
+		// Then, unregister it and check that we fall back to the wildcard again.
+		loc.A.Handle("2", returnString("specific"))
+		call("2", "specific", false)
+		loc.A.Handle("2", nil)
+		call("2", "wildcard", false)
 
 		// Unregister the wildcard handler and try again.
 		loc.A.Handle("", nil)
