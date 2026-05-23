@@ -124,9 +124,10 @@ type NetConner interface {
 	NetConn() net.Conn
 }
 
-// Pipe establishes a connected pair of [os.Pipe] for a server and a client,
-// returning a [chirp.Channel] for the server one for the client.  Each call to
-// Pipe returns a distinct pair of pipes.
+// Pipe establishes a connected pair of [os.Pipe] for a pair of peers,
+// and returns [PipeChannel] values wrapping them.
+// Sends to A are received by B and vice versa.
+// Each call to Pipe returns a distinct pair of pipes.
 func Pipe() (A, B *PipeChannel, _ error) {
 	sr, cw, err := os.Pipe()
 	if err != nil {
@@ -158,8 +159,7 @@ func ConnectPipe(r, w *os.File) *PipeChannel {
 	}
 }
 
-// A PipeChannel implements the [chirp.Channel] interface around a pipe whose
-// read and write endpoints are provided.
+// A PipeChannel implements the [chirp.Channel] interface around an [os.Pipe].
 type PipeChannel struct {
 	ctx    context.Context
 	cancel context.CancelFunc
