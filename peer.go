@@ -39,7 +39,7 @@ type Channel interface {
 }
 
 // A Handler processes a request from the remote peer.  A handler can obtain
-// the peer from its context argument using the [ContextPeer] helper.
+// the [Peer] it is attached to from its context argument using [ContextPeer].
 //
 // By default, the error reported by a handler is returned to the caller with
 // error code 0 and the text of the error as its message. A handler may return
