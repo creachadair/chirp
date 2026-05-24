@@ -37,6 +37,10 @@ func (p Packet) WriteTo(w io.Writer) (int64, error) {
 }
 
 // ReadFrom reads a packet from r in binary format. It satisfies [io.ReaderFrom].
+//
+// This method does not consume any data from r beyond the packet decoded.
+// On success the reported length is exactly the size of the packet.
+// On error, the reported length may be less than the full size.
 func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 	var buf [8]byte
 	nr, err := io.ReadFull(r, buf[:])
