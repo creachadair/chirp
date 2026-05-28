@@ -3,6 +3,7 @@
 package packet_test
 
 import (
+	"math/rand/v2"
 	"testing"
 
 	"github.com/creachadair/chirp/packet"
@@ -69,6 +70,33 @@ func TestVint30(t *testing.T) {
 		}
 		i++
 	}
+
+	t.Run("Random", func(t *testing.T) {
+		var want []uint32
+		var packed []byte
+
+		const numValues = 1000
+		for range numValues {
+			v := rand.Uint32() & 0x3fffffff // clear bits 30, 31
+			packed = packet.Vint30(v).Append(packed)
+			want = append(want, v)
+		}
+		t.Logf("Encoded %d values to %d bytes", len(want), len(packed))
+
+		var got []uint32
+		s := packet.NewScanner(packed)
+		for s.Len() != 0 {
+			v, err := s.Vint30()
+			if err != nil {
+				t.Fatalf("Invalid encoding at offset %d (%v)", s.Offset(), s.Rest())
+			}
+			got = append(got, uint32(v))
+		}
+
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Errorf("Decoded result (-got, +want):\n%s", diff)
+		}
+	})
 }
 
 func TestBuilder(t *testing.T) {
