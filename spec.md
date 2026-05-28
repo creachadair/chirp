@@ -29,7 +29,7 @@ A packet is an array of bytes with the following structure:
 | Offset | Bytes | Description                     |
 |--------|-------|---------------------------------|
 | 0      | 2     | "\xc7\x00" [199, 0]             |
-| 2      | 2     | packet type                     |
+| 2      | 2     | packet type (BE uint16)         |
 | 4      | 4     | size of payload (BE uint32 = n) |
 | 8      | n     | payload                         |
 
