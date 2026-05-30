@@ -34,11 +34,22 @@ func BenchmarkCall(b *testing.B) {
 	})
 
 	b.Run("IO-noop", func(b *testing.B) {
-		pa, pb := pipePeers(b)
+		pa, pb := ioPeers(b)
 		pa.Handle("X", noop)
 		runBench(b, pb, nil)
 	})
 	b.Run("IO-echo", func(b *testing.B) {
+		pa, pb := ioPeers(b)
+		pa.Handle("X", echo)
+		runBench(b, pb, payload)
+	})
+
+	b.Run("Pipe-noop", func(b *testing.B) {
+		pa, pb := pipePeers(b)
+		pa.Handle("X", noop)
+		runBench(b, pb, nil)
+	})
+	b.Run("Pipe-echo", func(b *testing.B) {
 		pa, pb := pipePeers(b)
 		pa.Handle("X", echo)
 		runBench(b, pb, payload)
@@ -57,11 +68,28 @@ func runBench(b *testing.B, peer *chirp.Peer, data []byte) {
 	}
 }
 
-func pipePeers(tb testing.TB) (pa, pb *chirp.Peer) {
+func ioPeers(tb testing.TB) (pa, pb *chirp.Peer) {
 	ar, bw := io.Pipe()
 	br, aw := io.Pipe()
-	pa = chirp.NewPeer().Start(channel.IO(ar, aw))
-	pb = chirp.NewPeer().Start(channel.IO(br, bw))
+	return startPeers(tb, channel.IO(ar, aw), channel.IO(br, bw))
+}
+
+func pipePeers(tb testing.TB) (pa, pb *chirp.Peer) {
+	tb.Helper()
+	ca, cb, err := channel.Pipe()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	tb.Cleanup(func() {
+		ca.Close()
+		cb.Close()
+	})
+	return startPeers(tb, ca, cb)
+}
+
+func startPeers(tb testing.TB, ca, cb chirp.Channel) (pa, pb *chirp.Peer) {
+	pa = chirp.NewPeer().Start(ca)
+	pb = chirp.NewPeer().Start(cb)
 	tb.Cleanup(func() {
 		if err := pa.Stop(); err != nil {
 			tb.Errorf("A stop: %v", err)
