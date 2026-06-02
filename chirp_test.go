@@ -1373,3 +1373,13 @@ func TestPeer_RemoteAddr(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleReservedPanic(t *testing.T) {
+	noop := func(context.Context, chirp.Packet) error { return nil }
+	p := chirp.NewPeer()
+	mtest.MustPanic(t, func() { p.HandlePacket(chirp.PacketRequest, noop) })
+	mtest.MustPanic(t, func() { p.HandlePacket(chirp.PacketResponse, noop) })
+	mtest.MustPanic(t, func() { p.HandlePacket(chirp.PacketCancel, noop) })
+	mtest.MustPanic(t, func() { p.HandlePacket(0, noop) })   // reserved but undefined
+	mtest.MustPanic(t, func() { p.HandlePacket(127, noop) }) // reserved but undefined
+}
