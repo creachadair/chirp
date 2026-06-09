@@ -129,8 +129,8 @@ func TestBuilder(t *testing.T) {
 	check(t, "Uint16", s.Uint16, 5000)
 	check(t, "Uint32", s.Uint32, 0xfc009a01)
 	check(t, "Vint30", s.Vint30, 999)
-	check(t, "VString", s.VGetString, "apple")
-	check(t, "VBytes", s.VGet, []byte("pear"))
+	check(t, "VGet", s.VGet, []byte("apple"))
+	check(t, "VGet", s.VGet, []byte("pear"))
 	check(t, "Literal", func() (string, error) { return s.GetString(5) }, "xyzzy")
 
 	if s.Len() != 0 {

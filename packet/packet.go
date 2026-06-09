@@ -169,22 +169,16 @@ func (s *Scanner) Rest() []byte { return s.rest }
 // The length must be encoded as a [Vint30].
 // The result value aliases the input, and the caller must not modify its
 // contents.
-func (s *Scanner) VGet() ([]byte, error) { return vget[[]byte](s) }
-
-// VGetString parses a single length-prefixed string from the head of s.
-// The length must be encoded as a [Vint30].
-func (s *Scanner) VGetString() (string, error) { return vget[string](s) }
-
-func vget[Str ~string | ~[]byte](s *Scanner) (out Str, err error) {
+func (s *Scanner) VGet() ([]byte, error) {
 	nb, err := s.Vint30()
 	if err != nil {
-		return out, err
+		return nil, err
 	}
 	if len(s.rest) < nb {
-		return out, fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), nb, io.ErrUnexpectedEOF)
+		return nil, fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), nb, io.ErrUnexpectedEOF)
 	}
 	s.offset += nb
-	out = Str(s.rest[:nb])
+	out := s.rest[:nb]
 	s.rest = s.rest[nb:]
 	return out, nil
 }
