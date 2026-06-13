@@ -187,19 +187,12 @@ func (s *Scanner) VGet() ([]byte, error) {
 // If the full requested amount is not available, a partial result is returned
 // along with an error.  The result value aliases the input, and the caller
 // must not modify its contents.
-func (s *Scanner) Get(n int) ([]byte, error) { return nget[[]byte](s, n) }
-
-// Get returns a string of exactly n bytes from the head of the input.
-// If the full requested amount is not available, a partial result is returned
-// along with an error.
-func (s *Scanner) GetString(n int) (string, error) { return nget[string](s, n) }
-
-func nget[Str ~string | ~[]byte](s *Scanner, n int) (Str, error) {
+func (s *Scanner) Get(n int) ([]byte, error) {
 	if len(s.rest) < n {
-		return Str(s.rest), fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), n, io.ErrUnexpectedEOF)
+		return s.rest, fmt.Errorf("value truncated (%d < %d bytes): %w", len(s.rest), n, io.ErrUnexpectedEOF)
 	}
 	s.offset += n
-	out := Str(s.rest[:n])
+	out := s.rest[:n]
 	s.rest = s.rest[n:]
 	return out, nil
 }

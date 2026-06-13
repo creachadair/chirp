@@ -131,7 +131,7 @@ func TestBuilder(t *testing.T) {
 	check(t, "Vint30", s.Vint30, 999)
 	check(t, "VGet", s.VGet, []byte("apple"))
 	check(t, "VGet", s.VGet, []byte("pear"))
-	check(t, "Literal", func() (string, error) { return s.GetString(5) }, "xyzzy")
+	check(t, "Literal", func() ([]byte, error) { return s.Get(5) }, []byte("xyzzy"))
 
 	if s.Len() != 0 {
 		t.Errorf("Extra data at EOF (%d bytes): %q", s.Len(), s.Rest())
