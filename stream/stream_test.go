@@ -97,7 +97,7 @@ func parseStreamSpec(t *testing.T, s string) stream.HandlerFunc {
 						return
 					}
 				case "err":
-					yield(nil, testErr)
+					yield(nil, errTestCondition)
 					return
 				case "server-cancel":
 					cancel := ctx.Value(serverCancelContextKey{}).(context.CancelFunc)
@@ -132,7 +132,7 @@ type clientCancelContextKey struct{}
 type clientCtxContextKey struct{}
 type serverCancelContextKey struct{}
 
-var testErr = errors.New("test")
+var errTestCondition = errors.New("test")
 
 func vals(vs ...string) []string {
 	return vs
