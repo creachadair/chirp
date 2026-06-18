@@ -6,7 +6,7 @@ import (
 	"context"
 	"net"
 	"os"
-	"time"
+	"sync"
 
 	"github.com/creachadair/chirp"
 )
@@ -29,6 +29,11 @@ func Pipe() (A, B *PipeChannel, _ error) {
 	return ConnectPipe(sr, sw), ConnectPipe(cr, cw), nil
 }
 
+type recv struct {
+	pkt chirp.Packet
+	err error
+}
+
 // ConnectPipe constructs a new [PipeChannel] wrapping the specified files.
 func ConnectPipe(r, w *os.File) *PipeChannel {
 	ctx, cancel := context.WithCancel(context.Background()) // cancel called by Close
@@ -45,8 +50,12 @@ func ConnectPipe(r, w *os.File) *PipeChannel {
 type PipeChannel struct {
 	ctx    context.Context
 	cancel context.CancelFunc
+	setup  sync.Once
 	r, w   *os.File
 	ch     IOChannel
+
+	req chan<- struct{}
+	rsp <-chan recv
 }
 
 // Files returns the underlying [os.File] values used by c.
@@ -62,24 +71,31 @@ func (c *PipeChannel) Send(pkt chirp.Packet) error {
 
 // Recv implements part of the [chirp.Channel] interface.
 func (c *PipeChannel) Recv() (chirp.Packet, error) {
-	// We cannot "cancel" a read, but we can set its deadline in the past, which
-	// will interrupt a pending read for a pipe.
-	stop := context.AfterFunc(c.ctx, func() {
-		c.r.SetReadDeadline(time.Unix(0, 0)) // long ago
-	})
-	pkt, err := c.ch.Recv()
+	c.init() // start service goroutine, if needed
 
-	// Cancel the cancellation, if it has not already occurred. Since the
-	// deadline will not fire unless c.ctx is expired, we do not have to worry
-	// about resetting the deadline; if it happens, the channel is closed.
+	// When sharing a pipe with multiple descendants, e.g., when the child
+	// process is a shell that will execute other subprocesses that can access
+	// the pipe, the shell may not (in general) close the write end of its dup
+	// of the pipe. This means a child may not get EOF from the reader after
+	// closing its write half, since there is another dup still active.
 	//
-	// We may already have a valid packet, though, so only report closed if it
-	// affected the Recv call (if it didn't, the next call will hit the close).
-	stop()
-	if err != nil && c.ctx.Err() != nil {
-		return chirp.Packet{}, net.ErrClosed
+	// Calling [os.File.Close] does not suffice, as the polling shims can defer
+	// closing the actual file descriptor. Moreover, even if we close the
+	// descriptor explicitly, that may not unblock a poll. To avoid blocking
+	// indefinitely in that case, perform the read in a goroutine and give up if
+	// the channel closes before we get an answer.
+	select {
+	case <-c.ctx.Done():
+		// closed
+	case c.req <- struct{}{}:
+		select {
+		case <-c.ctx.Done():
+			// closed
+		case r := <-c.rsp:
+			return r.pkt, r.err
+		}
 	}
-	return pkt, err
+	return chirp.Packet{}, net.ErrClosed
 }
 
 // Close implements part of the [chirp.Channel] interface.
@@ -87,4 +103,34 @@ func (c *PipeChannel) Close() error {
 	c.cancel()
 	<-c.ctx.Done()
 	return c.ch.Close()
+}
+
+// init lazily initializes the service goroutine on the first attempt to
+// receive from c, so that we do not run a goroutine for a channel that may be
+// abandoned before first use.
+func (c *PipeChannel) init() {
+	c.setup.Do(func() {
+		req := make(chan struct{})
+		rsp := make(chan recv)
+		go func() {
+			for {
+				select {
+				case <-c.ctx.Done():
+					return
+				case <-req:
+					// received request, perform a read
+				}
+
+				pkt, err := c.ch.Recv()
+				select {
+				case <-c.ctx.Done():
+					return
+				case rsp <- recv{pkt: pkt, err: err}:
+					// sent response
+				}
+			}
+		}()
+		c.req = req
+		c.rsp = rsp
+	})
 }
