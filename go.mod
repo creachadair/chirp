@@ -22,3 +22,5 @@ require (
 )
 
 tool honnef.co/go/tools/staticcheck
+
+retract v0.4.8 // incorrect shutdown semantics in PipeChannel
