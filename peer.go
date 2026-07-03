@@ -870,13 +870,12 @@ func isLocalExec(ctx context.Context) bool { return execContextKey{}.Lookup(ctx)
 //
 // The assignment of a network type uses the following heuristics:
 //
-// If s does not have the form [host]:port, the network is assigned as "tcp" if
-// the address is numeric; otherwise it is assigned "unix".  The network "unix"
-// is also assigned if port == "", if port contains characters other than ASCII
-// letters, digits, and "-", or if host contains a "/".
+// If s has the form [host]:port, the network is assigned as "tcp" unless host
+// contains "/", port == "", or port contains characters besides ASCII letters,
+// digits, and "-". In those cases it is assigned as "unix".
 //
-// Otherwise, the network is assigned as "tcp". Note that this function does
-// not verify whether the address is lexically valid.
+// If s does not have that form, it is assigned as "tcp" if it is entirely
+// numeric, otherwise it is assigned as "unix".
 func SplitAddress(s string) (network, address string) {
 	i := strings.LastIndex(s, ":")
 	if i < 0 {
