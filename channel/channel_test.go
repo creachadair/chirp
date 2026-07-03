@@ -98,7 +98,7 @@ func TestNetConn(t *testing.T) {
 }
 
 func TestPipe(t *testing.T) {
-	s, c, err := channel.Pipe()
+	s, c, err := channel.NewPipe()
 	if err != nil {
 		t.Fatalf("Pipe failed: %v", err)
 	}

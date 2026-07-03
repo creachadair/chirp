@@ -76,7 +76,7 @@ func ioPeers(tb testing.TB) (pa, pb *chirp.Peer) {
 
 func pipePeers(tb testing.TB) (pa, pb *chirp.Peer) {
 	tb.Helper()
-	ca, cb, err := channel.Pipe()
+	ca, cb, err := channel.NewPipe()
 	if err != nil {
 		tb.Fatal(err)
 	}

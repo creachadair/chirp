@@ -11,11 +11,11 @@ import (
 	"github.com/creachadair/chirp"
 )
 
-// Pipe establishes a connected pair of [os.Pipe] for a pair of peers,
-// and returns [PipeChannel] values wrapping them.
+// NewPipe establishes a connected pair of [os.Pipe] for a pair of peers, and
+// returns [Pipe] values wrapping them.
 // Sends to A are received by B and vice versa.
 // Each call to Pipe returns a distinct pair of pipes.
-func Pipe() (A, B *PipeChannel, _ error) {
+func NewPipe() (A, B *Pipe, _ error) {
 	sr, cw, err := os.Pipe()
 	if err != nil {
 		return nil, nil, err
@@ -34,10 +34,10 @@ type recv struct {
 	err error
 }
 
-// ConnectPipe constructs a new [PipeChannel] wrapping the specified files.
-func ConnectPipe(r, w *os.File) *PipeChannel {
+// ConnectPipe constructs a new [Pipe] wrapping the specified files.
+func ConnectPipe(r, w *os.File) *Pipe {
 	ctx, cancel := context.WithCancel(context.Background()) // cancel called by Close
-	return &PipeChannel{
+	return &Pipe{
 		ctx:    ctx,
 		cancel: cancel,
 		r:      r,
@@ -46,8 +46,8 @@ func ConnectPipe(r, w *os.File) *PipeChannel {
 	}
 }
 
-// A PipeChannel implements the [chirp.Channel] interface around an [os.Pipe].
-type PipeChannel struct {
+// A Pipe implements the [chirp.Channel] interface around an [os.Pipe].
+type Pipe struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	setup  sync.Once
@@ -59,10 +59,10 @@ type PipeChannel struct {
 }
 
 // Files returns the underlying [os.File] values used by c.
-func (c *PipeChannel) Files() (r, w *os.File) { return c.r, c.w }
+func (c *Pipe) Files() (r, w *os.File) { return c.r, c.w }
 
 // Send implements part of the [chirp.Channel] interface.
-func (c *PipeChannel) Send(pkt chirp.Packet) error {
+func (c *Pipe) Send(pkt chirp.Packet) error {
 	if c.ctx.Err() != nil {
 		return net.ErrClosed
 	}
@@ -70,7 +70,7 @@ func (c *PipeChannel) Send(pkt chirp.Packet) error {
 }
 
 // Recv implements part of the [chirp.Channel] interface.
-func (c *PipeChannel) Recv() (chirp.Packet, error) {
+func (c *Pipe) Recv() (chirp.Packet, error) {
 	c.init() // start service goroutine, if needed
 
 	// When sharing a pipe with multiple descendants, e.g., when the child
@@ -99,7 +99,7 @@ func (c *PipeChannel) Recv() (chirp.Packet, error) {
 }
 
 // Close implements part of the [chirp.Channel] interface.
-func (c *PipeChannel) Close() error {
+func (c *Pipe) Close() error {
 	c.cancel()
 	<-c.ctx.Done()
 	return c.ch.Close()
@@ -108,7 +108,7 @@ func (c *PipeChannel) Close() error {
 // init lazily initializes the service goroutine on the first attempt to
 // receive from c, so that we do not run a goroutine for a channel that may be
 // abandoned before first use.
-func (c *PipeChannel) init() {
+func (c *Pipe) init() {
 	c.setup.Do(func() {
 		req := make(chan struct{})
 		rsp := make(chan recv)
