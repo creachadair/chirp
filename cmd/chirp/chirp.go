@@ -6,11 +6,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/creachadair/chirp"
+	"github.com/creachadair/chirp/channel"
 	"github.com/creachadair/chirp/packet"
 	"github.com/creachadair/command"
 	"github.com/creachadair/flax"
@@ -67,29 +71,92 @@ but the following symbols modify the length encoding for future subpatterns:
 The byte order and length encoding are reset to the defaults within a subpattern
 and changes to those values do not persist after the subpattern ends.
 `,
-				Run: func(env *command.Env) error {
-					if len(env.Args) == 0 {
-						return env.Usagef("Missing format argument")
-					}
-					enc, rest, err := formatData(env.Args[0], env.Args[1:])
-					if err != nil {
-						return err
-					} else if len(rest) != 0 {
-						return fmt.Errorf("extra arguments: %q", rest)
-					}
-					if flags.Quoted {
-						fmt.Printf("%q\n", enc.Bytes())
-					} else {
-						os.Stdout.Write(enc.Bytes())
-					}
-					return nil
-				},
+				Run: runPack,
+			}, {
+				Name:     "call",
+				Usage:    "<address> <method> [<args>...]",
+				Help:     `Connect to the specified address and call method with the given arguments.`,
+				SetFlags: command.Flags(flax.MustBind, &callFlags),
+				Run:      command.Adapt(runCall),
 			},
 			command.VersionCommand(),
 			command.HelpCommand(nil),
 		},
 	}
 	command.RunOrFail(root.NewEnv(nil), os.Args[1:])
+}
+
+func runPack(env *command.Env) error {
+	if len(env.Args) == 0 {
+		return env.Usagef("Missing format argument")
+	}
+	enc, rest, err := formatData(env.Args[0], env.Args[1:])
+	if err != nil {
+		return err
+	} else if len(rest) != 0 {
+		return fmt.Errorf("extra arguments: %q", rest)
+	}
+	if flags.Quoted {
+		fmt.Printf("%q\n", enc.Bytes())
+	} else {
+		os.Stdout.Write(enc.Bytes())
+	}
+	return nil
+}
+
+var callFlags struct {
+	Raw   bool `flag:"raw,Write output in binary format"`
+	Debug bool `flag:"debug,default=$FFS_DEBUG,Enable debug logging (warning: noisy)"`
+}
+
+func runCall(env *command.Env, addr, method string, args ...string) error {
+	var reqData []byte
+	if len(args) != 0 {
+		pkt, rest, err := formatData(args[0], args[1:])
+		if err != nil {
+			return fmt.Errorf("request body: %w", err)
+		} else if len(rest) != 0 {
+			return fmt.Errorf("extra arguments: %q", rest)
+		}
+		reqData = pkt.Bytes()
+	}
+	p := chirp.NewPeer()
+	if callFlags.Debug {
+		lg := log.New(log.Writer(), "[chirp] ", log.LstdFlags|log.Lmicroseconds)
+		lg.Printf("calling: method %q argument %q", method, reqData)
+		lg.Printf("dial %q", addr)
+		p.LogPackets(func(pkt chirp.Packet, dir chirp.PacketDir) { lg.Printf("%s %v", dir, pkt) })
+	}
+
+	ntype, addr := chirp.SplitAddress(addr)
+	c, err := new(net.Dialer).DialContext(env.Context(), ntype, addr)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	defer p.Start(channel.IO(c, c)).Stop()
+
+	rsp, err := p.Call(env.Context(), method, reqData)
+	if err != nil {
+		if ce, ok := errors.AsType[*chirp.CallError](err); ok && ce.Err == nil {
+			fmt.Fprintf(env, "Service error: %s (code %d)", ce.Response.Code, ce.Code)
+			if ce.Message != "" {
+				fmt.Fprintf(env, ", message: %q", ce.Message)
+			}
+			fmt.Fprintln(env)
+			if len(ce.Data) != 0 {
+				fmt.Fprintf(env, " - auxiliary data: %s\n", printable(ce.Data))
+			}
+		}
+		return fmt.Errorf("call failed: %w", err)
+	}
+	if callFlags.Raw {
+		_, err := os.Stdout.Write(rsp.Data)
+		return err
+	} else if len(rsp.Data) != 0 {
+		fmt.Println(printable(rsp.Data))
+	}
+	return nil
 }
 
 func formatData(pat string, args []string) (packet.Builder, []string, error) {
@@ -233,4 +300,13 @@ func cutParen(s string, l, r rune) (string, bool) {
 		}
 	}
 	return s, false
+}
+
+func printable(data []byte) string {
+	for _, b := range data {
+		if b < ' ' || b > '~' {
+			return fmt.Sprintf("%q", data)
+		}
+	}
+	return string(data)
 }
