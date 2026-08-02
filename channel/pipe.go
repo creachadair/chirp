@@ -14,7 +14,7 @@ import (
 // NewPipe establishes a connected pair of [os.Pipe] for a pair of peers, and
 // returns [Pipe] values wrapping them.
 // Sends to A are received by B and vice versa.
-// Each call to Pipe returns a distinct pair of pipes.
+// Each call to NewPipe returns a distinct pair of pipes.
 func NewPipe() (A, B *Pipe, _ error) {
 	sr, cw, err := os.Pipe()
 	if err != nil {
