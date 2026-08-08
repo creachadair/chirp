@@ -73,9 +73,11 @@ and changes to those values do not persist after the subpattern ends.
 `,
 				Run: runPack,
 			}, {
-				Name:     "call",
-				Usage:    "<address> <method> [<args>...]",
-				Help:     `Connect to the specified address and call method with the given arguments.`,
+				Name:  "call",
+				Usage: "<address> <method> <pattern> [<args>...]",
+				Help: `Connect to the specified address and call method with the given arguments.
+
+Arguments are encoded according to the specified pattern (see "pack").`,
 				SetFlags: command.Flags(flax.MustBind, &callFlags),
 				Run:      command.Adapt(runCall),
 			},
