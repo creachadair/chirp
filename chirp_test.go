@@ -164,12 +164,11 @@ func TestMethodLen(t *testing.T) {
 			loc := peers.NewLocal()
 			defer loc.Stop()
 
-			var cerr *chirp.CallError
 			rsp, err := loc.A.Call(t.Context(), tooLongName, nil)
 			if rsp != nil {
 				t.Errorf("Call: unexpected response: %v", err)
 			}
-			if !errors.As(err, &cerr) {
+			if cerr, ok := errors.AsType[*chirp.CallError](err); !ok {
 				t.Errorf("Call: unexpected error: got %v, want CallError", err)
 			} else if got := cerr.Err.Error(); !strings.Contains(got, "name too long") {
 				t.Errorf("Call: got %q, want too long", got)
@@ -1176,8 +1175,7 @@ func TestHandlerPanic(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Call panic: got %+v, want error", rsp)
 		}
-		var ce *chirp.CallError
-		if !errors.As(err, &ce) {
+		if ce, ok := errors.AsType[*chirp.CallError](err); !ok {
 			t.Errorf("Error %[1]T is not a CallError: %[1]v", err)
 		} else if len(ce.Data) == 0 {
 			t.Error("Error does not contain a call stack")
