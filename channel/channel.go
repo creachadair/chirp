@@ -105,8 +105,8 @@ func (c IOChannel) NetConn() net.Conn {
 // nil.
 //
 // The [chirp.Channel] retains ownership of any [net.Conn] that is returned.
-// Note that reading, writing or otherwise changing the state of the resulting
-// connection may invalidate assumptions of the channel that uses it.
+// Note that sending or receiving data, or otherwise changing the state of the
+// resulting connection may invalidate assumptions of the channel that uses it.
 func NetConn(c chirp.Channel) net.Conn {
 	if nc, ok := c.(NetConner); ok {
 		return nc.NetConn()
