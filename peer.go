@@ -48,8 +48,9 @@ type Channel interface {
 type Handler func(context.Context, *Request) ([]byte, error)
 
 // A PacketHandler processes a packet from the remote peer. A packet handler
-// can obtain the peer from its context argument using the [ContextPeer]
-// helper.  Any error reported by a packet handler is protocol fatal.
+// can obtain the [Peer] it is attached to from its context argument using the
+// [ContextPeer] helper.  Any error reported by a packet handler is protocol
+// fatal.
 type PacketHandler func(context.Context, Packet) error
 
 // A PacketLogger logs a packet exchanged with the remote peer.  The value of
