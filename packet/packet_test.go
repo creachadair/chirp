@@ -106,7 +106,7 @@ func TestBuilder(t *testing.T) {
 	b.Uint16(5000)
 	b.Uint32(0xfc009a01)
 	b.Vint30(999)
-	b.VPutString("apple")
+	b.VPut("apple")
 	b.VPut([]byte("pear"))
 	b.PutString("xyzzy")
 

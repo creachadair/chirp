@@ -27,17 +27,10 @@ func (b *Builder) Put(vs ...byte) { b.buf = append(b.buf, vs...) }
 func (b *Builder) PutString(s string) { b.buf = append(b.buf, s...) }
 
 // VPut appends a length-prefixed string to b. The length is encoded as a [Vint30].
-func (b *Builder) VPut(vs []byte) {
+func (b *Builder) VPut[Str ~string | []byte](vs Str) {
 	b.Grow(VLen(len(vs)))
 	b.Vint30(uint32(len(vs)))
 	b.buf = append(b.buf, vs...)
-}
-
-// VPutString appends a length-prefixed string to b. The length is encoded as a [Vint30].
-func (b *Builder) VPutString(s string) {
-	b.Grow(VLen(len(s)))
-	b.Vint30(uint32(len(s)))
-	b.buf = append(b.buf, s...)
 }
 
 // Uint16 appends v to b in big-endian order.
