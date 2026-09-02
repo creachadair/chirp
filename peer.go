@@ -315,7 +315,7 @@ func (p *Peer) Call(ctx context.Context, method string, data []byte) (_ *Respons
 			}
 
 			// Closed without a response means there was a protocol fatal error.
-			p.tasks.Wait()
+			p.waitTasks()
 			return nil, callError(fmt.Errorf("call terminated: %w", p.err))
 		}
 	}
