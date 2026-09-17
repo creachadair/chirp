@@ -614,13 +614,13 @@ func TestCustomPacket(t *testing.T) {
 		var log []chirp.Packet
 		var got []chirp.Packet
 		loc.A.
-			HandlePacket(128, func(ctx context.Context, pkt chirp.Packet) error {
+			HandlePacket(256, func(ctx context.Context, pkt chirp.Packet) error {
 				got = append(got, pkt)
 
 				// Send a "reply" packet back to the caller. This does not need to be
 				// the same packet type that we received.
 				rsp := string(pkt.Payload) + " reply"
-				return chirp.ContextPeer(ctx).SendPacket(129, []byte(rsp))
+				return chirp.ContextPeer(ctx).SendPacket(257, []byte(rsp))
 			}).
 			LogPackets(func(pkt chirp.Packet, dir chirp.PacketDir) {
 				t.Logf("A: [%s] %v", dir, pkt)
@@ -629,7 +629,7 @@ func TestCustomPacket(t *testing.T) {
 				}
 			})
 		loc.B.
-			HandlePacket(129, func(ctx context.Context, pkt chirp.Packet) error {
+			HandlePacket(257, func(ctx context.Context, pkt chirp.Packet) error {
 				log = append(log, pkt)
 				return nil
 			})
@@ -638,10 +638,10 @@ func TestCustomPacket(t *testing.T) {
 		p1 := chirp.Packet{Type: 100, Payload: []byte("unrecognized")}
 
 		// Registered custom packet type: Logged and "processed".
-		p2 := chirp.Packet{Type: 128, Payload: []byte("custom")}
+		p2 := chirp.Packet{Type: 256, Payload: []byte("custom")}
 
 		// A packet handler can also send packets back to its caller.
-		p3 := chirp.Packet{Type: 129, Payload: []byte("custom reply")}
+		p3 := chirp.Packet{Type: 257, Payload: []byte("custom reply")}
 
 		if err := loc.B.SendPacket(p1.Type, p1.Payload); err != nil {
 			t.Fatalf("SendPacket: %v", err)
@@ -656,11 +656,11 @@ func TestCustomPacket(t *testing.T) {
 			t.Errorf("Stop peer: %v", err)
 		}
 
-		if diff := cmp.Diff([]chirp.Packet{p1, p2, p3}, log); diff != "" {
-			t.Errorf("Packet log (-want, +got):\n%s", diff)
+		if diff := cmp.Diff(log, []chirp.Packet{p1, p2, p3}); diff != "" {
+			t.Errorf("Packet log (-got, +want):\n%s", diff)
 		}
-		if diff := cmp.Diff([]chirp.Packet{p2}, got); diff != "" {
-			t.Errorf("Custom packet (-want, +got):\n%s", diff)
+		if diff := cmp.Diff(got, []chirp.Packet{p2}); diff != "" {
+			t.Errorf("Custom packet (-got, +want):\n%s", diff)
 		}
 	})
 }
@@ -1092,7 +1092,7 @@ func TestClone(t *testing.T) {
 		}
 	}
 
-	const ptype = 129
+	const ptype = 257
 	var acount, ccount int
 	var pg sync.WaitGroup
 
@@ -1194,7 +1194,7 @@ func TestPacketHandlerPanic(t *testing.T) {
 		loc := peers.NewLocal()
 		defer loc.Stop()
 
-		const customType = chirp.PacketType(129)
+		const customType = chirp.PacketType(257)
 		const failure = "the handler did the bad"
 		loc.A.HandlePacket(customType, func(ctx context.Context, pkt chirp.Packet) error {
 			panic(failure)

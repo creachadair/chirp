@@ -93,8 +93,8 @@ func (p Packet) String() string {
 
 // PacketType describes the structure type of a Chirp v0 packet.
 //
-// All packet type values from 0 to 127 inclusive are reserved by the protocol
-// and MUST NOT be used for any other purpose. Packet type values from 128 to
+// All packet type values from 0 to 255 inclusive are reserved by the protocol
+// and MUST NOT be used for any other purpose. Packet type values from 256 to
 // 65535 are reserved for use by the implementation.
 type PacketType uint16
 
@@ -103,7 +103,7 @@ const (
 	PacketCancel   PacketType = 3 // A cancellation signal for a pending call
 	PacketResponse PacketType = 4 // The final response from a call
 
-	maxReservedType = 127
+	maxReservedType = 255
 )
 
 func (p PacketType) String() string {
@@ -115,7 +115,7 @@ func (p PacketType) String() string {
 	case PacketResponse:
 		return "RESPONSE"
 	default:
-		return fmt.Sprintf("TYPE:%d", byte(p))
+		return fmt.Sprintf("TYPE:%d", uint16(p))
 	}
 }
 
