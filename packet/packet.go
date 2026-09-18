@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/creachadair/mds/value"
 )
@@ -117,8 +118,8 @@ func (s *Scanner) Vint30() (int, error) {
 		return 0, io.ErrUnexpectedEOF
 	}
 	var w uint32
-	for i := nb - 1; i >= 0; i-- {
-		w = (w * 256) + uint32(s.rest[i])
+	for _, d := range slices.Backward(s.rest[:nb]) {
+		w = (w * 256) + uint32(d)
 	}
 	s.offset += nb
 	s.rest = s.rest[nb:]
