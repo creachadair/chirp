@@ -3,6 +3,7 @@
 package packet_test
 
 import (
+	"io"
 	"math/rand/v2"
 	"testing"
 
@@ -146,5 +147,22 @@ func check[T any](t *testing.T, label string, f func() (T, error), want T) {
 		t.Errorf("%s: unexpected error: %v", label, err)
 	} else if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("%s result (-got, +want):\n%s", label, diff)
+	}
+}
+
+func BenchmarkScanVint30(b *testing.B) {
+	var pb packet.Builder
+	for range 2000 {
+		pb.Vint30(rand.N[uint32](packet.MaxVint30))
+	}
+
+	for b.Loop() {
+		s := packet.NewScanner(pb.Bytes())
+		_, err := s.Vint30()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			b.Fatalf("Unexpected error: %v", err)
+		}
 	}
 }
