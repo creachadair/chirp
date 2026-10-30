@@ -147,6 +147,10 @@ func (p *Peer) Start(ch Channel) *Peer {
 
 // Metrics returns a metrics map for the peer. It is safe for the caller to add
 // additional metrics to the map while the peer is active.
+//
+// A root peer (one not created via [Peer.Clone], or that is cloned from a root
+// peer) uses a global process-wide metrics pool. Use [Peer.Detach] to allocate
+// a new empty metrics pool for the peer and its clone descendants.
 func (p *Peer) Metrics() *expvar.Map { return p.metrics().emap }
 
 // Detach detaches the peer metrics for p, and returns p. Calling Detach resets
