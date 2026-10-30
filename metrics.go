@@ -2,7 +2,10 @@
 
 package chirp
 
-import "expvar"
+import (
+	"expvar"
+	"sync"
+)
 
 // peerMetrics record peer activity counters.
 type peerMetrics struct {
@@ -20,7 +23,7 @@ type peerMetrics struct {
 	emap *expvar.Map
 }
 
-var rootMetrics = newPeerMetrics()
+var rootMetrics = sync.OnceValue(newPeerMetrics)
 
 func newPeerMetrics() *peerMetrics {
 	pm := &peerMetrics{emap: new(expvar.Map)}

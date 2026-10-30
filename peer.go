@@ -163,7 +163,7 @@ func (p *Peer) metrics() *peerMetrics {
 	if pm := p.peermx.Load(); pm != nil {
 		return pm
 	}
-	return rootMetrics
+	return rootMetrics()
 }
 
 // Clone returns a new unstarted peer that has the same method handlers, packet
