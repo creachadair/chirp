@@ -3,6 +3,7 @@
 package chirp
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -63,6 +64,23 @@ func (p *Packet) ReadFrom(r io.Reader) (int64, error) {
 		}
 	}
 	return int64(nr), nil
+}
+
+// Decode decodes data into a Chirp v0 packet.
+func (p *Packet) Decode(data []byte) error {
+	_, err := p.ReadFrom(bytes.NewReader(data))
+	return err
+}
+
+// Encode encodes p in binary format.
+func (p Packet) Encode() []byte {
+	var buf bytes.Buffer
+	buf.Grow(8 + len(p.Payload))
+	_, err := p.WriteTo(&buf)
+	if err != nil {
+		panic(fmt.Sprintf("invalid packet: %v", err))
+	}
+	return buf.Bytes()
 }
 
 // String returns a human-friendly rendering of the packet.

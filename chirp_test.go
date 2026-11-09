@@ -1381,3 +1381,33 @@ func TestHandleReservedPanic(t *testing.T) {
 	mtest.MustPanic(t, func() { p.HandlePacket(0, noop) })   // reserved but undefined
 	mtest.MustPanic(t, func() { p.HandlePacket(127, noop) }) // reserved but undefined
 }
+
+func TestPacketEncoding(t *testing.T) {
+	p := chirp.Packet{
+		Protocol: 123,
+		Type:     456,
+		Payload:  []byte("abc def ghi jkl"),
+	}
+	enc := p.Encode()
+	t.Logf("Encoding: %#q", enc)
+	var q chirp.Packet
+	if err := q.Decode(enc); err != nil {
+		t.Errorf("Decode: unexpected error: %v", err)
+	} else if diff := cmp.Diff(q, p); diff != "" {
+		t.Errorf("Decode result (-got, +want):\n%s", diff)
+	}
+
+	var buf bytes.Buffer
+	if _, err := p.WriteTo(&buf); err != nil {
+		t.Errorf("WriteTo: unexpected error: %v", err)
+	}
+	if diff := cmp.Diff(buf.Bytes(), enc); diff != "" {
+		t.Errorf("WriteTo result (-got, +want):\n%s", diff)
+	}
+	var r chirp.Packet
+	if _, err := r.ReadFrom(&buf); err != nil {
+		t.Errorf("ReadFrom: unexpected error: %v", err)
+	} else if diff := cmp.Diff(r, p); diff != "" {
+		t.Errorf("ReadFrom result (-got, +want):\n%s", diff)
+	}
+}
