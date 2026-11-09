@@ -54,6 +54,14 @@ func (b *Builder) Bytes() []byte { return b.buf }
 // Reset discards the contents of b and leaves it empty.
 func (b *Builder) Reset() { b.buf = b.buf[:0] }
 
+// Write implements [io.Writer] appending the data written to b.
+// This implementation never reports an error.
+func (b *Builder) Write(data []byte) (int, error) {
+	b.Grow(len(data))
+	b.buf = append(b.buf, data...)
+	return len(data), nil
+}
+
 // Grow resizes the internal buffer of b if necessary to ensure that at least n
 // more bytes can be added without triggering another allocation.
 func (b *Builder) Grow(n int) {

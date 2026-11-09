@@ -110,10 +110,11 @@ func TestBuilder(t *testing.T) {
 	b.VPut("apple")
 	b.VPut([]byte("pear"))
 	b.PutString("xyzzy")
+	io.WriteString(&b, "abcdef")
 
-	const want = "\x01\x05\x09\x64\x13\x88\xfc\x00\x9a\x01\x9d\x0f\x14apple\x10pearxyzzy"
-	//             ^   ^---^---^-- ^-----  ^-------------- ^-----  ^------- ^------^----
-	//          bool  byte*3        uint16  uint32          vint30  string   bytes literal
+	const want = "\x01\x05\x09\x64\x13\x88\xfc\x00\x9a\x01\x9d\x0f\x14apple\x10pearxyzzyabcdef"
+	//             ^   ^---^---^-- ^-----  ^-------------- ^-----  ^------- ^------^----^-----
+	//          bool  byte*3        uint16  uint32          vint30  string   bytes literal write
 
 	if n := b.Len(); n != len(want) {
 		t.Errorf("Len = %d, want %d", n, len(want))
@@ -133,6 +134,7 @@ func TestBuilder(t *testing.T) {
 	check(t, "VGet", s.VGet, []byte("apple"))
 	check(t, "VGet", s.VGet, []byte("pear"))
 	check(t, "Literal", func() ([]byte, error) { return s.Get(5) }, []byte("xyzzy"))
+	check(t, "Write", func() ([]byte, error) { return s.Get(6) }, []byte("abcdef"))
 
 	if s.Len() != 0 {
 		t.Errorf("Extra data at EOF (%d bytes): %q", s.Len(), s.Rest())
